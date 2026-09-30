@@ -23,3 +23,6 @@ jobs:
 
       - name: Run Gareen demo
         run: python math_world.py
+
+      - name: Run automatic proof search demo
+        run: python proof_search.py
