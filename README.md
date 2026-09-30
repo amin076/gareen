@@ -4,7 +4,7 @@ Gareen is a small research project for exploring whether a machine can grow form
 
 The host computer and the mathematical object-world are kept separate. Python may use ordinary arithmetic, Boolean logic, memory, and control flow to execute the program, but mathematical knowledge is accepted by Gareen only when it is represented inside the formal world and passes the proof checker.
 
-## Phase 10 — General conjecture discovery
+## Phase 11 — Artificial Mathematician prototype
 
 Gareen now distinguishes:
 
@@ -18,7 +18,7 @@ verified theorems
 knowledge state
 ```
 
-Gareen now mines patterns over symbolic expressions containing variables, proposes universally quantified conjectures, attempts symbolic proofs with open variables, closes successful proofs with universal introduction, and stores only theorems accepted by the trusted checker.
+Gareen now coordinates conjecture generation, strategy selection, automatic induction synthesis, helper-lemma proposal, formal verification, and a research notebook. The Phase 11 demo deliberately starts from the axioms only, without loading the hand-authored T1–T14 theorem library.
 
 ### Arithmetic primitives
 
@@ -491,6 +491,103 @@ to a proposed general law:
 
 and then demand a formal symbolic proof of that law.
 
+### Artificial Mathematician prototype
+
+`artificial_mathematician.py` adds a bounded research loop above the existing conjecture and proof engines.
+
+The prototype has four explicit research components:
+
+```text
+Conjecture Generator
+Strategy Selector
+Induction Synthesizer
+Lemma Proposer
+```
+
+The campaign can start from:
+
+```text
+primitives + definitions + axioms
+```
+
+with no preloaded hand-authored theorem library.
+
+The conjecture generator combines the unary pattern miner from Phase 10 with a new two-variable grammar. Two-variable expressions are observed over a 3×3 sample grid:
+
+```text
+x,y ∈ {0,1,2}
+```
+
+so patterns such as:
+
+```text
+x + y
+y + x
+```
+
+can become candidate universal laws. Sample agreement is still only conjectural evidence.
+
+For each conjecture the Strategy Selector tries:
+
+```text
+1. bounded direct symbolic proof
+2. automatic induction synthesis
+3. lower-complexity helper-lemma proposal
+4. retry after verified lemmas are added
+```
+
+The Induction Synthesizer constructs the induction structure itself:
+
+```text
+P(0)
+P(n)  [temporary induction hypothesis]
+  ↓
+P(S(n))
+  ↓
+INDUCTION
+  ↓
+∀n P(n)
+```
+
+The induction hypothesis is represented as an actual open `ASSUMPTION` in the candidate derivation. It must be discharged by the trusted `INDUCTION` rule before the theorem can enter the knowledge state.
+
+The proof-search layer now exposes an untrusted derivation API so higher-level strategies can search under temporary assumptions. That derivation is never accepted directly; the Artificial Mathematician assembles a complete proof and re-runs `check_proof()`.
+
+If direct proof and induction both fail, the Lemma Proposer selects lower-complexity conjectures. A helper lemma is usable only after it is independently proved and stored as a verified theorem.
+
+The research notebook records:
+
+```text
+generated conjectures
+attempted conjectures
+successful strategy
+proof length
+invented helper lemmas
+dependencies
+failed strategies and reasons
+```
+
+The intended research loop is now:
+
+```text
+observe
+  ↓
+conjecture
+  ↓
+choose proof strategy
+  ├── direct search
+  ├── induction
+  └── invent lemma → verify lemma → retry
+  ↓
+trusted proof checker
+  ↓
+new knowledge
+  ↓
+research notebook
+```
+
+This is an **Artificial Mathematician prototype inside Gareen's small formal arithmetic world**, not a claim of a general autonomous mathematician.
+
 ### Capture-safe universal instantiation
 
 `FORALL_ELIM` now checks whether substituting a term would accidentally capture one of its free variables under an inner quantifier. Gareen rejects such a proof step instead of silently accepting an invalid substitution.
@@ -574,11 +671,12 @@ Gareen now includes addition, recursive multiplication, universal quantification
 
 - existential quantification;
 - a general equality substitution rule;
-- automatic induction-proof synthesis for newly generated conjectures;
-- multi-variable conjecture mining beyond the unary Phase 10 grammar;
+- richer induction planning across multiple possible induction variables;
+- recursive lemma invention rather than a single bounded helper layer;
 - semantic theorem-interest scoring;
 - persistent discovery campaigns and replayable search traces;
-- autonomous lemma invention when direct proof search fails;
+- definitions and concept invention;
+- existential reasoning, order, divisibility, and prime-number concepts;
 - Lean;
 - LLMs or agents.
 
@@ -586,19 +684,19 @@ Those should be added gradually, only after each lower layer is testable and aud
 
 ## Next milestone
 
-Phase 11 should make the general-discovery loop substantially more autonomous:
+The next milestone should focus less on adding school-arithmetic identities and more on the **research process**:
 
 ```text
-generate two-variable and three-variable conjectures
-detect when direct symbolic proof search stalls
-synthesize induction structure automatically
-propose intermediate lemmas
-retry the parent conjecture using verified lemmas
-rank discoveries by novelty, reuse, and dependency impact
-persist complete discovery campaigns
+persistent campaign memory
+proof-failure analysis
+recursive lemma invention
+novelty / reuse / dependency-impact scoring
+concept and definition proposal
+order, divisibility, and prime-number language
+comparison of independent discovery paths
 ```
 
-The verifier should remain deterministic and separate even if future search is guided by heuristics, agents, or an LLM.
+A future LLM or agent may guide conjecture ranking and strategy choice, but the formal verifier should remain deterministic and separate.
 
 ## Research question
 
