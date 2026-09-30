@@ -23,6 +23,8 @@ from math_world import (
     RULE_INDUCTION,
     RULE_EQ_ADD_LEFT_CONGRUENCE,
     RULE_EQ_ADD_RIGHT_CONGRUENCE,
+    RULE_EQ_MUL_LEFT_CONGRUENCE,
+    RULE_EQ_MUL_RIGHT_CONGRUENCE,
     THREE,
     TWO,
     Add,
@@ -33,6 +35,8 @@ from math_world import (
     Proof,
     ProofStep,
     Succ,
+    U,
+    V,
     W,
     X,
     Y,
@@ -81,6 +85,8 @@ class FormalWorldTests(unittest.TestCase):
         self.assertIn("EQ_SUCC_CONGRUENCE", names)
         self.assertIn("EQ_ADD_LEFT_CONGRUENCE", names)
         self.assertIn("EQ_ADD_RIGHT_CONGRUENCE", names)
+        self.assertIn("EQ_MUL_LEFT_CONGRUENCE", names)
+        self.assertIn("EQ_MUL_RIGHT_CONGRUENCE", names)
         self.assertIn("EQ_TRANSITIVITY", names)
         self.assertIn("INDUCTION", names)
 
@@ -156,6 +162,10 @@ class ProofEngineTests(unittest.TestCase):
                 "T8_ADD_ASSOCIATIVE",
                 "T9_ZERO_MUL_X",
                 "T10_MUL_ONE",
+                "T11_MUL_SUCC_LEFT",
+                "T12_MUL_COMMUTATIVE",
+                "T13_MUL_DISTRIBUTIVE",
+                "T14_MUL_ASSOCIATIVE",
             ],
         )
         self.assertEqual(
@@ -221,6 +231,61 @@ class ProofEngineTests(unittest.TestCase):
         self.assertEqual(
             state.theorems["T10_MUL_ONE"].statement,
             ForAll(X, Eq(Mul(X, ONE), X)),
+        )
+        self.assertEqual(
+            state.theorems["T11_MUL_SUCC_LEFT"].statement,
+            ForAll(
+                X,
+                ForAll(
+                    V,
+                    Eq(
+                        Mul(Succ(X), V),
+                        Add(Mul(X, V), V),
+                    ),
+                ),
+            ),
+        )
+        self.assertEqual(
+            state.theorems["T12_MUL_COMMUTATIVE"].statement,
+            ForAll(
+                X,
+                ForAll(
+                    Z,
+                    Eq(Mul(X, Z), Mul(Z, X)),
+                ),
+            ),
+        )
+        self.assertEqual(
+            state.theorems["T13_MUL_DISTRIBUTIVE"].statement,
+            ForAll(
+                X,
+                ForAll(
+                    U,
+                    ForAll(
+                        V,
+                        Eq(
+                            Mul(X, Add(U, V)),
+                            Add(Mul(X, U), Mul(X, V)),
+                        ),
+                    ),
+                ),
+            ),
+        )
+        self.assertEqual(
+            state.theorems["T14_MUL_ASSOCIATIVE"].statement,
+            ForAll(
+                X,
+                ForAll(
+                    U,
+                    ForAll(
+                        W,
+                        Eq(
+                            Mul(Mul(X, U), W),
+                            Mul(X, Mul(U, W)),
+                        ),
+                    ),
+                ),
+            ),
         )
 
     def test_induction_theorem_depends_on_addition_axioms(self):
@@ -331,6 +396,27 @@ class ProofEngineTests(unittest.TestCase):
         self.assertIn(AXIOM_MUL_ZERO.name, dependencies)
         self.assertIn(AXIOM_MUL_SUCCESSOR.name, dependencies)
         self.assertIn("T5_ZERO_PLUS_X", dependencies)
+
+    def test_mul_commutativity_depends_on_left_successor_lemma(self):
+        state = build_initial_knowledge()
+        dependencies = state.theorems["T12_MUL_COMMUTATIVE"].dependencies
+
+        self.assertIn("T9_ZERO_MUL_X", dependencies)
+        self.assertIn("T11_MUL_SUCC_LEFT", dependencies)
+
+    def test_distributivity_uses_addition_associativity(self):
+        state = build_initial_knowledge()
+        dependencies = state.theorems["T13_MUL_DISTRIBUTIVE"].dependencies
+
+        self.assertIn("T8_ADD_ASSOCIATIVE", dependencies)
+        self.assertIn(AXIOM_MUL_SUCCESSOR.name, dependencies)
+
+    def test_mul_associativity_uses_distributivity(self):
+        state = build_initial_knowledge()
+        dependencies = state.theorems["T14_MUL_ASSOCIATIVE"].dependencies
+
+        self.assertIn("T13_MUL_DISTRIBUTIVE", dependencies)
+        self.assertIn(AXIOM_MUL_SUCCESSOR.name, dependencies)
 
     def test_later_theorem_depends_on_earlier_theorem(self):
         state = build_initial_knowledge()
