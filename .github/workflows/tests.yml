@@ -35,3 +35,45 @@ jobs:
 
       - name: Run Artificial Mathematician demo
         run: python artificial_mathematician.py
+
+  lean-verification:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Cache Lean and Lake
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.elan
+            .lake
+          key: ${{ runner.os }}-gareen-lean-${{ hashFiles('lean-toolchain', 'lakefile.toml') }}
+
+      - name: Install Lean toolchain manager
+        run: |
+          if [ ! -x "$HOME/.elan/bin/elan" ]; then
+            curl https://elan.lean-lang.org/elan-init.sh -sSf | sh -s -- -y
+          fi
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+          "$HOME/.elan/bin/lean" --version
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Resolve Mathlib dependency
+        run: lake update
+
+      - name: Fetch Mathlib build cache
+        run: lake exe cache get
+
+      - name: Build Gareen Lean library
+        run: lake build
+
+      - name: Run Python to Lean bridge demo
+        run: python lean_bridge.py --ci-demo
+
+      - name: Run Lean-backed research demo
+        run: python lean_research.py --limit 2 --json-out .gareen/lean-research-ci.json
