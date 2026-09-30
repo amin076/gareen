@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 jobs:
-  unit-tests:
+  python-research:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -35,3 +35,29 @@ jobs:
 
       - name: Run Artificial Mathematician demo
         run: python artificial_mathematician.py
+
+  lean-kernel:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build Lean project with Mathlib
+        uses: leanprover/lean-action@v1
+        with:
+          use-mathlib-cache: true
+          build: true
+
+      - name: Generate theorem through Python to Lean bridge
+        run: python lean_bridge.py
+
+      - name: Verify generated bridge theorem with Lean
+        run: lake env lean Gareen/BridgeSmoke.lean
+
+      - name: Run Lean-backed Gareen research
+        run: python lean_research.py
