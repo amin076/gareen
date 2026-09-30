@@ -4,7 +4,7 @@ Gareen is a small research project for exploring whether a machine can grow form
 
 The host computer and the mathematical object-world are kept separate. Python may use ordinary arithmetic, Boolean logic, memory, and control flow to execute the program, but mathematical knowledge is accepted by Gareen only when it is represented inside the formal world and passes the proof checker.
 
-## Phase 3 — First proof engine
+## Phase 4 — Induction and the first general theorem
 
 Gareen now distinguishes:
 
@@ -18,7 +18,7 @@ verified theorems
 knowledge state
 ```
 
-This is the first phase where Gareen stores results that were **derived**, rather than supplied as starting axioms.
+Gareen now goes beyond finite examples and can verify a small induction proof. This is the first phase where a genuinely general arithmetic theorem is derived from the starting axioms.
 
 ### Arithmetic primitives
 
@@ -75,8 +75,11 @@ ASSUMPTION
 FORALL_ELIM
 MODUS_PONENS
 EQ_SYMMETRY
+EQ_SUCC_CONGRUENCE
+EQ_TRANSITIVITY
 CONTRADICTION
 NEGATION_INTRO
+INDUCTION
 ```
 
 These are logical proof operations. They are not additional arithmetic facts.
@@ -106,6 +109,42 @@ Internally the numerals are still successor terms, so for example `1 = 2` means:
 ```text
 S(0) = S(S(0))
 ```
+
+### The first induction theorem
+
+The important new result is:
+
+```text
+T5_ZERO_PLUS_X
+∀x. Add(0, x) = x
+```
+
+This theorem is **not** an axiom. Gareen receives only:
+
+```text
+A3: Add(x, 0) = x
+A4: Add(x, S(y)) = S(Add(x, y))
+```
+
+The proof checked by Gareen has the usual induction structure:
+
+```text
+Base:
+  Add(0, 0) = 0                 from A3
+
+Induction hypothesis:
+  Add(0, x) = x
+
+Step:
+  Add(0, S(x)) = S(Add(0, x))  from A4
+  S(Add(0, x)) = S(x)          by successor congruence
+  Add(0, S(x)) = S(x)          by equality transitivity
+
+Therefore:
+  ∀x. Add(0, x) = x            by induction
+```
+
+The temporary induction hypothesis is tracked as an open assumption and must be discharged by the `INDUCTION` rule before the theorem is accepted.
 
 ### Why T3 matters
 
@@ -182,9 +221,8 @@ python -m unittest discover -s tests -v
 
 This is still a tiny fragment, not full Peano Arithmetic.
 
-Gareen does **not** yet include:
+Gareen now includes a deliberately small, explicit induction rule, but it still does **not** include:
 
-- induction;
 - multiplication;
 - existential quantification;
 - a general equality substitution rule;
@@ -197,13 +235,14 @@ Those should be added gradually, only after each lower layer is testable and aud
 
 ## Next milestone
 
-The next mathematically meaningful step is to add enough logic for induction and then prove a genuinely general statement such as:
+The next mathematically meaningful step is to use the new induction machinery to derive stronger laws of addition, especially:
 
 ```text
-∀x. Add(0, x) = x
+S(x) + y = S(x + y)
+x + y = y + x
 ```
 
-That would be important because `Add(x, 0) = x` is an axiom in the current world, while `Add(0, x) = x` would be a derived theorem.
+The second statement is commutativity of addition. It should remain a theorem derived from the small starting system, not a new axiom.
 
 ## Research question
 
