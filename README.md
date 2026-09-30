@@ -4,7 +4,7 @@ Gareen is a small research project for exploring whether a machine can grow form
 
 The host computer and the mathematical object-world are kept separate. Python may use ordinary arithmetic, Boolean logic, memory, and control flow to execute the program, but mathematical knowledge is accepted by Gareen only when it is represented inside the formal world and passes the proof checker.
 
-## Phase 9 — Autonomous theorem search
+## Phase 10 — General conjecture discovery
 
 Gareen now distinguishes:
 
@@ -18,7 +18,7 @@ verified theorems
 knowledge state
 ```
 
-Gareen now goes one step beyond goal-directed proof search: it can generate a bounded universe of closed expressions, turn them into candidate statements, attempt proofs automatically, and store only candidates that survive the trusted checker. Candidate generation and ranking remain explicitly untrusted.
+Gareen now mines patterns over symbolic expressions containing variables, proposes universally quantified conjectures, attempts symbolic proofs with open variables, closes successful proofs with universal introduction, and stores only theorems accepted by the trusted checker.
 
 ### Arithmetic primitives
 
@@ -400,6 +400,97 @@ verified autonomous theorem
 
 This is still **bounded discovery**, not a claim of novel human mathematics. The current candidate universe is intentionally small and uses closed arithmetic expressions built from the existing symbols.
 
+### General conjecture discovery
+
+`general_conjecture.py` moves Gareen from closed numerical instances to symbolic patterns with variables.
+
+Phase 10 does **not** hard-code a theorem target. Instead it generates a bounded expression grammar containing forms such as:
+
+```text
+x
+S(x)
+x + 0
+0 + x
+x + 1
+1 + x
+x + x
+x × 1
+1 × x
+x × 2
+2 × x
+```
+
+Each expression is evaluated symbolically on the sample terms:
+
+```text
+0, 1, 2, 3
+```
+
+Expressions with matching output signatures are grouped into the same empirical pattern class. For example, the system can notice that:
+
+```text
+x + 1
+S(x)
+```
+
+produce the same outputs on the sample set and therefore propose:
+
+```text
+∀x. x + 1 = S(x)
+```
+
+But finite agreement is **never treated as proof**.
+
+The pipeline is:
+
+```text
+symbolic expression grammar
+        ↓
+finite observations
+        ↓
+pattern classes
+        ↓
+general conjectures
+        ↓
+open-formula proof search
+        ↓
+FORALL_INTRO
+        ↓
+trusted deterministic checker
+        ↓
+verified general theorem
+```
+
+The bounded proof searcher can now optionally work with formulas containing free variables. After it constructs a proof of the open body, Phase 10 adds a checked `FORALL_INTRO` step and re-runs the trusted verifier on the complete universal theorem.
+
+Existing unary axioms and theorems are canonicalized so Gareen does not simply rediscover them with equality reversed.
+
+Autonomously accepted general theorems receive names such as:
+
+```text
+G1_AUTO
+G2_AUTO
+G3_AUTO
+...
+```
+
+This phase is the first point where Gareen can move from observations like:
+
+```text
+0 + 1 = 1
+1 + 1 = 2
+2 + 1 = 3
+3 + 1 = 4
+```
+
+to a proposed general law:
+
+```text
+∀x. x + 1 = S(x)
+```
+
+and then demand a formal symbolic proof of that law.
+
 ### Capture-safe universal instantiation
 
 `FORALL_ELIM` now checks whether substituting a term would accidentally capture one of its free variables under an inner quantifier. Gareen rejects such a proof step instead of silently accepting an invalid substitution.
@@ -483,10 +574,11 @@ Gareen now includes addition, recursive multiplication, universal quantification
 
 - existential quantification;
 - a general equality substitution rule;
-- induction-aware autonomous proof search;
-- open-variable / universally quantified theorem discovery;
+- automatic induction-proof synthesis for newly generated conjectures;
+- multi-variable conjecture mining beyond the unary Phase 10 grammar;
 - semantic theorem-interest scoring;
 - persistent discovery campaigns and replayable search traces;
+- autonomous lemma invention when direct proof search fails;
 - Lean;
 - LLMs or agents.
 
@@ -494,15 +586,16 @@ Those should be added gradually, only after each lower layer is testable and aud
 
 ## Next milestone
 
-Phase 10 should move from closed arithmetic instances toward **general conjecture discovery**:
+Phase 11 should make the general-discovery loop substantially more autonomous:
 
 ```text
-generate formulas with free variables
-propose universal closures
-search induction proofs
-invent and test intermediate lemmas
-persist failed branches and successful proof traces
+generate two-variable and three-variable conjectures
+detect when direct symbolic proof search stalls
+synthesize induction structure automatically
+propose intermediate lemmas
+retry the parent conjecture using verified lemmas
 rank discoveries by novelty, reuse, and dependency impact
+persist complete discovery campaigns
 ```
 
 The verifier should remain deterministic and separate even if future search is guided by heuristics, agents, or an LLM.
