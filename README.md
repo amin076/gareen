@@ -4,7 +4,7 @@ Gareen is a small research project for exploring whether a machine can grow form
 
 The host computer and the mathematical object-world are kept separate. Python may use ordinary arithmetic, Boolean logic, memory, and control flow to execute the program, but mathematical knowledge is accepted by Gareen only when it is represented inside the formal world and passes the proof checker.
 
-## Phase 8 — Automatic proof search
+## Phase 9 — Autonomous theorem search
 
 Gareen now distinguishes:
 
@@ -18,7 +18,7 @@ verified theorems
 knowledge state
 ```
 
-Gareen now has a separate bounded proof-search layer. The searcher proposes proof trees from existing axioms, theorems, universal instantiation, equality symmetry, congruence, and transitivity; the original trusted checker remains the only component allowed to accept a proof.
+Gareen now goes one step beyond goal-directed proof search: it can generate a bounded universe of closed expressions, turn them into candidate statements, attempt proofs automatically, and store only candidates that survive the trusted checker. Candidate generation and ranking remain explicitly untrusted.
 
 ### Arithmetic primitives
 
@@ -339,6 +339,67 @@ verified theorem
 
 Phase 8 deliberately does not yet search induction proofs or open-variable theorems. Those remain future work.
 
+### Autonomous theorem search
+
+`autonomous_discovery.py` no longer requires a human-supplied theorem goal.
+
+The Phase 9 explorer:
+
+```text
+generates a bounded universe of closed terms
+normalizes terms only to propose conjectures
+builds candidate equalities
+orders candidates with a simple heuristic
+runs bounded proof search
+rechecks every candidate proof with check_proof()
+rejects direct/trivial instances below a proof-length threshold
+stores accepted discoveries in KnowledgeState
+records accepted, skipped, and failed attempts
+```
+
+Normalization is **not** treated as proof. It is only a conjecture generator. A candidate such as:
+
+```text
+Add(1, 1) = 2
+```
+
+must still be independently reconstructed by the proof searcher and then verified by the deterministic checker before it can become a theorem.
+
+Autonomous discoveries receive state-aware names:
+
+```text
+D1_AUTO
+D2_AUTO
+D3_AUTO
+...
+```
+
+and each record keeps:
+
+```text
+statement
+proof length
+heuristic score
+dependencies
+attempt status
+```
+
+The trust boundary is therefore:
+
+```text
+candidate generator / heuristic
+            ↓
+bounded proof search
+            ↓
+candidate proof
+            ↓
+trusted deterministic checker
+            ↓
+verified autonomous theorem
+```
+
+This is still **bounded discovery**, not a claim of novel human mathematics. The current candidate universe is intentionally small and uses closed arithmetic expressions built from the existing symbols.
+
 ### Capture-safe universal instantiation
 
 `FORALL_ELIM` now checks whether substituting a term would accidentally capture one of its free variables under an inner quantifier. Gareen rejects such a proof step instead of silently accepting an invalid substitution.
@@ -422,9 +483,10 @@ Gareen now includes addition, recursive multiplication, universal quantification
 
 - existential quantification;
 - a general equality substitution rule;
-- induction-aware automatic theorem search;
-- open-variable / universally quantified proof search;
-- theorem-interest scoring;
+- induction-aware autonomous proof search;
+- open-variable / universally quantified theorem discovery;
+- semantic theorem-interest scoring;
+- persistent discovery campaigns and replayable search traces;
 - Lean;
 - LLMs or agents.
 
@@ -432,14 +494,15 @@ Those should be added gradually, only after each lower layer is testable and aud
 
 ## Next milestone
 
-The next step is to expand search without weakening the trust boundary:
+Phase 10 should move from closed arithmetic instances toward **general conjecture discovery**:
 
 ```text
-search universally quantified goals
+generate formulas with free variables
+propose universal closures
 search induction proofs
-record failed search branches
-rank candidate lemmas
-discover useful intermediate statements
+invent and test intermediate lemmas
+persist failed branches and successful proof traces
+rank discoveries by novelty, reuse, and dependency impact
 ```
 
 The verifier should remain deterministic and separate even if future search is guided by heuristics, agents, or an LLM.
