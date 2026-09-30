@@ -202,8 +202,8 @@ class AutonomousTheoremExplorer:
         self.min_proof_steps = min_proof_steps
         self.include_multiplication = include_multiplication
         self.searcher = searcher or BoundedProofSearcher(
-            max_depth=6,
-            max_terms=64,
+            max_depth=5,
+            max_terms=32,
             instantiation_rounds=1,
         )
 
@@ -314,8 +314,8 @@ class AutonomousTheoremExplorer:
 def phase9_demo() -> None:
     state = build_initial_knowledge()
     explorer = AutonomousTheoremExplorer(
-        max_attempts=24,
-        max_discoveries=4,
+        max_attempts=12,
+        max_discoveries=2,
         min_proof_steps=4,
     )
 
