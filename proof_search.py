@@ -47,6 +47,7 @@ from math_world import (
     RULE_EQ_TRANSITIVITY,
     RULE_FORALL_ELIM,
     RULE_THEOREM,
+    RULE_ASSUMPTION,
 )
 
 
@@ -338,7 +339,7 @@ class BoundedProofSearcher:
             self._remember(
                 Derivation(
                     conclusion=assumption,
-                    rule="ASSUMPTION",
+                    rule=RULE_ASSUMPTION,
                 )
             )
 
