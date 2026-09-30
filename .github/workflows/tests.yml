@@ -42,35 +42,19 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Cache Lean and Lake
-        uses: actions/cache@v4
+      - name: Build and audit Lean project
+        uses: leanprover/lean-action@v1
         with:
-          path: |
-            ~/.elan
-            .lake
-          key: ${{ runner.os }}-gareen-lean-${{ hashFiles('lean-toolchain', 'lakefile.toml') }}
-
-      - name: Install Lean toolchain manager
-        run: |
-          if [ ! -x "$HOME/.elan/bin/elan" ]; then
-            curl https://elan.lean-lang.org/elan-init.sh -sSf | sh -s -- -y
-          fi
-          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
-          "$HOME/.elan/bin/lean" --version
+          auto-config: false
+          build: true
+          test: false
+          use-mathlib-cache: true
+          axiom-audit: true
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-
-      - name: Resolve Mathlib dependency
-        run: lake update
-
-      - name: Fetch Mathlib build cache
-        run: lake exe cache get
-
-      - name: Build Gareen Lean library
-        run: lake build
 
       - name: Run Python to Lean bridge demo
         run: python lean_bridge.py --ci-demo
