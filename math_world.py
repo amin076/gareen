@@ -1,4 +1,4 @@
-"""Gareen Phase 3: a tiny formal arithmetic world with auditable proofs.
+"""Gareen Phase 4: a tiny formal arithmetic world with induction.
 
 The host Python runtime is meta-level infrastructure. Mathematical knowledge is
 accepted into Gareen only when it is represented in the object-world and passes
@@ -205,6 +205,9 @@ RULE_MODUS_PONENS = "MODUS_PONENS"
 RULE_EQ_SYMMETRY = "EQ_SYMMETRY"
 RULE_CONTRADICTION = "CONTRADICTION"
 RULE_NEGATION_INTRO = "NEGATION_INTRO"
+RULE_EQ_SUCC_CONGRUENCE = "EQ_SUCC_CONGRUENCE"
+RULE_EQ_TRANSITIVITY = "EQ_TRANSITIVITY"
+RULE_INDUCTION = "INDUCTION"
 
 INFERENCE_RULES = (
     InferenceRule(RULE_AXIOM, "Use a declared arithmetic axiom."),
@@ -217,6 +220,18 @@ INFERENCE_RULES = (
     InferenceRule(
         RULE_NEGATION_INTRO,
         "If assumption P leads to ⊥, discharge P and derive ¬P.",
+    ),
+    InferenceRule(
+        RULE_EQ_SUCC_CONGRUENCE,
+        "From a=b, derive S(a)=S(b).",
+    ),
+    InferenceRule(
+        RULE_EQ_TRANSITIVITY,
+        "From a=b and b=c, derive a=c.",
+    ),
+    InferenceRule(
+        RULE_INDUCTION,
+        "From P(0) and a derivation of P(S(n)) under assumption P(n), derive ∀n.P(n).",
     ),
 )
 
@@ -342,6 +357,7 @@ class ProofStep:
     premises: tuple[int, ...] = ()
     source: Optional[str] = None
     term: Optional[Expr] = None
+    variable: Optional[Var] = None
     discharge: Optional[int] = None
     note: str = ""
 
@@ -478,6 +494,84 @@ def check_proof(
                 errors.append(f"{prefix}: equality was not reversed correctly")
 
             dependencies.append(inherited)
+            continue
+
+        if step.rule == RULE_EQ_SUCC_CONGRUENCE:
+            if len(premise_steps) != 1:
+                errors.append(f"{prefix}: EQ_SUCC_CONGRUENCE needs one premise")
+                dependencies.append(inherited)
+                continue
+
+            equality = premise_steps[0].conclusion
+            if not isinstance(equality, Eq):
+                errors.append(f"{prefix}: premise is not an equality")
+            elif step.conclusion != Eq(Succ(equality.left), Succ(equality.right)):
+                errors.append(f"{prefix}: successor congruence is malformed")
+
+            dependencies.append(inherited)
+            continue
+
+        if step.rule == RULE_EQ_TRANSITIVITY:
+            if len(premise_steps) != 2:
+                errors.append(f"{prefix}: EQ_TRANSITIVITY needs two premises")
+                dependencies.append(inherited)
+                continue
+
+            first = premise_steps[0].conclusion
+            second = premise_steps[1].conclusion
+            if not isinstance(first, Eq) or not isinstance(second, Eq):
+                errors.append(f"{prefix}: both premises must be equalities")
+            elif first.right != second.left:
+                errors.append(f"{prefix}: middle equality terms do not match")
+            elif step.conclusion != Eq(first.left, second.right):
+                errors.append(f"{prefix}: transitive conclusion is malformed")
+
+            dependencies.append(inherited)
+            continue
+
+        if step.rule == RULE_INDUCTION:
+            if len(premise_steps) != 2:
+                errors.append(f"{prefix}: INDUCTION needs base and step premises")
+                dependencies.append(inherited)
+                continue
+
+            if not isinstance(step.conclusion, ForAll):
+                errors.append(f"{prefix}: induction must conclude a universal formula")
+                dependencies.append(inherited)
+                continue
+
+            variable = step.variable or step.conclusion.variable
+            if variable != step.conclusion.variable:
+                errors.append(f"{prefix}: induction variable does not match conclusion")
+
+            predicate = step.conclusion.body
+            expected_base = substitute_formula(predicate, variable, ZERO)
+            expected_step = substitute_formula(predicate, variable, Succ(variable))
+
+            if premise_steps[0].conclusion != expected_base:
+                errors.append(f"{prefix}: base case does not match P(0)")
+            if premise_steps[1].conclusion != expected_step:
+                errors.append(f"{prefix}: induction step does not match P(S(n))")
+
+            if step.discharge is None:
+                errors.append(f"{prefix}: induction must discharge P(n)")
+                dependencies.append(inherited)
+                continue
+
+            if step.discharge < 0 or step.discharge >= index:
+                errors.append(f"{prefix}: invalid induction discharge step")
+                dependencies.append(inherited)
+                continue
+
+            assumption_step = proof.steps[step.discharge]
+            if assumption_step.rule != RULE_ASSUMPTION:
+                errors.append(f"{prefix}: induction discharge target is not an assumption")
+            elif assumption_step.conclusion != predicate:
+                errors.append(f"{prefix}: induction assumption is not P(n)")
+            elif step.discharge not in inherited:
+                errors.append(f"{prefix}: induction assumption is not open")
+
+            dependencies.append(inherited - frozenset({step.discharge}))
             continue
 
         if step.rule == RULE_CONTRADICTION:
@@ -743,6 +837,72 @@ def build_initial_knowledge() -> KnowledgeState:
     )
     state.add_theorem("T4_TWO_PLUS_ZERO", proof_t4)
 
+    zero_plus_x = Eq(Add(ZERO, X), X)
+    zero_plus_zero = Eq(Add(ZERO, ZERO), ZERO)
+    zero_plus_sx = Eq(Add(ZERO, Succ(X)), Succ(X))
+    add_zero_sx = Eq(Add(ZERO, Succ(X)), Succ(Add(ZERO, X)))
+    succ_ih = Eq(Succ(Add(ZERO, X)), Succ(X))
+
+    proof_t5 = Proof(
+        statement=ForAll(X, zero_plus_x),
+        steps=(
+            ProofStep(
+                conclusion=AXIOM_ADD_ZERO.formula,
+                rule=RULE_AXIOM,
+                source=AXIOM_ADD_ZERO.name,
+            ),
+            ProofStep(
+                conclusion=zero_plus_zero,
+                rule=RULE_FORALL_ELIM,
+                premises=(0,),
+                term=ZERO,
+            ),
+            ProofStep(
+                conclusion=zero_plus_x,
+                rule=RULE_ASSUMPTION,
+                note="Induction hypothesis P(x): 0 + x = x.",
+            ),
+            ProofStep(
+                conclusion=AXIOM_ADD_SUCCESSOR.formula,
+                rule=RULE_AXIOM,
+                source=AXIOM_ADD_SUCCESSOR.name,
+            ),
+            ProofStep(
+                conclusion=ForAll(
+                    Y,
+                    Eq(Add(ZERO, Succ(Y)), Succ(Add(ZERO, Y))),
+                ),
+                rule=RULE_FORALL_ELIM,
+                premises=(3,),
+                term=ZERO,
+            ),
+            ProofStep(
+                conclusion=add_zero_sx,
+                rule=RULE_FORALL_ELIM,
+                premises=(4,),
+                term=X,
+            ),
+            ProofStep(
+                conclusion=succ_ih,
+                rule=RULE_EQ_SUCC_CONGRUENCE,
+                premises=(2,),
+            ),
+            ProofStep(
+                conclusion=zero_plus_sx,
+                rule=RULE_EQ_TRANSITIVITY,
+                premises=(5, 6),
+            ),
+            ProofStep(
+                conclusion=ForAll(X, zero_plus_x),
+                rule=RULE_INDUCTION,
+                premises=(1, 7),
+                variable=X,
+                discharge=2,
+            ),
+        ),
+    )
+    state.add_theorem("T5_ZERO_PLUS_X", proof_t5)
+
     return state
 
 
@@ -768,8 +928,8 @@ def print_world() -> None:
         print(f"  - {rule.name}")
 
 
-def phase3_demo() -> None:
-    print("Gareen Phase 3")
+def phase4_demo() -> None:
+    print("Gareen Phase 4")
     print("================")
     print_world()
 
@@ -790,4 +950,4 @@ def phase3_demo() -> None:
 
 
 if __name__ == "__main__":
-    phase3_demo()
+    phase4_demo()
