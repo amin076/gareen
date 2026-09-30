@@ -1,4 +1,4 @@
-"""Gareen Phase 6: addition associativity and recursive multiplication.
+"""Gareen Phase 7: verified multiplication laws.
 
 The host Python runtime is meta-level infrastructure. Mathematical knowledge is
 accepted into Gareen only when it is represented in the object-world and passes
@@ -241,6 +241,8 @@ RULE_NEGATION_INTRO = "NEGATION_INTRO"
 RULE_EQ_SUCC_CONGRUENCE = "EQ_SUCC_CONGRUENCE"
 RULE_EQ_ADD_LEFT_CONGRUENCE = "EQ_ADD_LEFT_CONGRUENCE"
 RULE_EQ_ADD_RIGHT_CONGRUENCE = "EQ_ADD_RIGHT_CONGRUENCE"
+RULE_EQ_MUL_LEFT_CONGRUENCE = "EQ_MUL_LEFT_CONGRUENCE"
+RULE_EQ_MUL_RIGHT_CONGRUENCE = "EQ_MUL_RIGHT_CONGRUENCE"
 RULE_EQ_TRANSITIVITY = "EQ_TRANSITIVITY"
 RULE_INDUCTION = "INDUCTION"
 
@@ -271,6 +273,14 @@ INFERENCE_RULES = (
     InferenceRule(
         RULE_EQ_ADD_RIGHT_CONGRUENCE,
         "From a=b, derive Add(c,a)=Add(c,b).",
+    ),
+    InferenceRule(
+        RULE_EQ_MUL_LEFT_CONGRUENCE,
+        "From a=b, derive Mul(a,c)=Mul(b,c).",
+    ),
+    InferenceRule(
+        RULE_EQ_MUL_RIGHT_CONGRUENCE,
+        "From a=b, derive Mul(c,a)=Mul(c,b).",
     ),
     InferenceRule(
         RULE_EQ_TRANSITIVITY,
@@ -723,6 +733,46 @@ def check_proof(
                 Add(step.term, equality.right),
             ):
                 errors.append(f"{prefix}: right Add congruence is malformed")
+
+            dependencies.append(inherited)
+            continue
+
+        if step.rule == RULE_EQ_MUL_LEFT_CONGRUENCE:
+            if len(premise_steps) != 1:
+                errors.append(f"{prefix}: EQ_MUL_LEFT_CONGRUENCE needs one premise")
+                dependencies.append(inherited)
+                continue
+
+            equality = premise_steps[0].conclusion
+            if not isinstance(equality, Eq):
+                errors.append(f"{prefix}: premise is not an equality")
+            elif step.term is None:
+                errors.append(f"{prefix}: EQ_MUL_LEFT_CONGRUENCE requires a term")
+            elif step.conclusion != Eq(
+                Mul(equality.left, step.term),
+                Mul(equality.right, step.term),
+            ):
+                errors.append(f"{prefix}: left Mul congruence is malformed")
+
+            dependencies.append(inherited)
+            continue
+
+        if step.rule == RULE_EQ_MUL_RIGHT_CONGRUENCE:
+            if len(premise_steps) != 1:
+                errors.append(f"{prefix}: EQ_MUL_RIGHT_CONGRUENCE needs one premise")
+                dependencies.append(inherited)
+                continue
+
+            equality = premise_steps[0].conclusion
+            if not isinstance(equality, Eq):
+                errors.append(f"{prefix}: premise is not an equality")
+            elif step.term is None:
+                errors.append(f"{prefix}: EQ_MUL_RIGHT_CONGRUENCE requires a term")
+            elif step.conclusion != Eq(
+                Mul(step.term, equality.left),
+                Mul(step.term, equality.right),
+            ):
+                errors.append(f"{prefix}: right Mul congruence is malformed")
 
             dependencies.append(inherited)
             continue
@@ -1762,6 +1812,950 @@ def build_initial_knowledge() -> KnowledgeState:
     )
     state.add_theorem("T10_MUL_ONE", proof_t10)
 
+    # T11: successor in the left factor.
+    left_succ_body = Eq(
+        Mul(Succ(X), Y),
+        Add(Mul(X, Y), Y),
+    )
+    left_succ_base = Eq(
+        Mul(Succ(X), ZERO),
+        Add(Mul(X, ZERO), ZERO),
+    )
+    left_succ_step = Eq(
+        Mul(Succ(X), Succ(Y)),
+        Add(Mul(X, Succ(Y)), Succ(Y)),
+    )
+
+    proof_t11 = Proof(
+        statement=ForAll(X, ForAll(Y, left_succ_body)),
+        steps=(
+            ProofStep(AXIOM_MUL_ZERO.formula, RULE_AXIOM, source=AXIOM_MUL_ZERO.name),
+            ProofStep(
+                Eq(Mul(Succ(X), ZERO), ZERO),
+                RULE_FORALL_ELIM,
+                premises=(0,),
+                term=Succ(X),
+            ),
+            ProofStep(
+                Eq(Mul(X, ZERO), ZERO),
+                RULE_FORALL_ELIM,
+                premises=(0,),
+                term=X,
+            ),
+            ProofStep(AXIOM_ADD_ZERO.formula, RULE_AXIOM, source=AXIOM_ADD_ZERO.name),
+            ProofStep(
+                Eq(Add(Mul(X, ZERO), ZERO), Mul(X, ZERO)),
+                RULE_FORALL_ELIM,
+                premises=(3,),
+                term=Mul(X, ZERO),
+            ),
+            ProofStep(
+                Eq(Add(Mul(X, ZERO), ZERO), ZERO),
+                RULE_EQ_TRANSITIVITY,
+                premises=(4, 2),
+            ),
+            ProofStep(
+                Eq(ZERO, Add(Mul(X, ZERO), ZERO)),
+                RULE_EQ_SYMMETRY,
+                premises=(5,),
+            ),
+            ProofStep(
+                left_succ_base,
+                RULE_EQ_TRANSITIVITY,
+                premises=(1, 6),
+            ),
+            ProofStep(
+                left_succ_body,
+                RULE_ASSUMPTION,
+                note="Induction hypothesis for successor in the left factor.",
+            ),
+            ProofStep(
+                AXIOM_MUL_SUCCESSOR.formula,
+                RULE_AXIOM,
+                source=AXIOM_MUL_SUCCESSOR.name,
+            ),
+            ProofStep(
+                ForAll(
+                    Z,
+                    Eq(
+                        Mul(Succ(X), Succ(Z)),
+                        Add(Mul(Succ(X), Z), Succ(X)),
+                    ),
+                ),
+                RULE_FORALL_ELIM,
+                premises=(9,),
+                term=Succ(X),
+            ),
+            ProofStep(
+                Eq(
+                    Mul(Succ(X), Succ(Y)),
+                    Add(Mul(Succ(X), Y), Succ(X)),
+                ),
+                RULE_FORALL_ELIM,
+                premises=(10,),
+                term=Y,
+            ),
+            ProofStep(
+                Eq(
+                    Add(Mul(Succ(X), Y), Succ(X)),
+                    Add(Add(Mul(X, Y), Y), Succ(X)),
+                ),
+                RULE_EQ_ADD_LEFT_CONGRUENCE,
+                premises=(8,),
+                term=Succ(X),
+            ),
+            ProofStep(
+                Eq(
+                    Mul(Succ(X), Succ(Y)),
+                    Add(Add(Mul(X, Y), Y), Succ(X)),
+                ),
+                RULE_EQ_TRANSITIVITY,
+                premises=(11, 12),
+            ),
+            ProofStep(
+                AXIOM_ADD_SUCCESSOR.formula,
+                RULE_AXIOM,
+                source=AXIOM_ADD_SUCCESSOR.name,
+            ),
+            ProofStep(
+                ForAll(
+                    Z,
+                    Eq(
+                        Add(Add(Mul(X, Y), Y), Succ(Z)),
+                        Succ(Add(Add(Mul(X, Y), Y), Z)),
+                    ),
+                ),
+                RULE_FORALL_ELIM,
+                premises=(14,),
+                term=Add(Mul(X, Y), Y),
+            ),
+            ProofStep(
+                Eq(
+                    Add(Add(Mul(X, Y), Y), Succ(X)),
+                    Succ(Add(Add(Mul(X, Y), Y), X)),
+                ),
+                RULE_FORALL_ELIM,
+                premises=(15,),
+                term=X,
+            ),
+            ProofStep(
+                ForAll(X, ForAll(Z, ForAll(W, Eq(
+                    Add(Add(X, Z), W),
+                    Add(X, Add(Z, W)),
+                )))),
+                RULE_THEOREM,
+                source="T8_ADD_ASSOCIATIVE",
+            ),
+            ProofStep(
+                ForAll(Z, ForAll(W, Eq(
+                    Add(Add(Mul(X, Y), Z), W),
+                    Add(Mul(X, Y), Add(Z, W)),
+                ))),
+                RULE_FORALL_ELIM,
+                premises=(17,),
+                term=Mul(X, Y),
+            ),
+            ProofStep(
+                ForAll(W, Eq(
+                    Add(Add(Mul(X, Y), Y), W),
+                    Add(Mul(X, Y), Add(Y, W)),
+                )),
+                RULE_FORALL_ELIM,
+                premises=(18,),
+                term=Y,
+            ),
+            ProofStep(
+                Eq(
+                    Add(Add(Mul(X, Y), Y), X),
+                    Add(Mul(X, Y), Add(Y, X)),
+                ),
+                RULE_FORALL_ELIM,
+                premises=(19,),
+                term=X,
+            ),
+            ProofStep(
+                ForAll(X, ForAll(Y, Eq(Add(X, Y), Add(Y, X)))),
+                RULE_THEOREM,
+                source="T7_ADD_COMMUTATIVE",
+            ),
+            ProofStep(
+                ForAll(Y, Eq(Add(Y, X), Add(X, Y))),
+                RULE_FORALL_ELIM,
+                premises=(21,),
+                term=Y,
+            ),
+            ProofStep(
+                Eq(Add(Y, X), Add(X, Y)),
+                RULE_FORALL_ELIM,
+                premises=(22,),
+                term=X,
+            ),
+            ProofStep(
+                Eq(
+                    Add(Mul(X, Y), Add(Y, X)),
+                    Add(Mul(X, Y), Add(X, Y)),
+                ),
+                RULE_EQ_ADD_RIGHT_CONGRUENCE,
+                premises=(23,),
+                term=Mul(X, Y),
+            ),
+            ProofStep(
+                ForAll(Z, ForAll(W, Eq(
+                    Add(Add(Mul(X, Y), Z), W),
+                    Add(Mul(X, Y), Add(Z, W)),
+                ))),
+                RULE_FORALL_ELIM,
+                premises=(17,),
+                term=Mul(X, Y),
+            ),
+            ProofStep(
+                ForAll(W, Eq(
+                    Add(Add(Mul(X, Y), X), W),
+                    Add(Mul(X, Y), Add(X, W)),
+                )),
+                RULE_FORALL_ELIM,
+                premises=(25,),
+                term=X,
+            ),
+            ProofStep(
+                Eq(
+                    Add(Add(Mul(X, Y), X), Y),
+                    Add(Mul(X, Y), Add(X, Y)),
+                ),
+                RULE_FORALL_ELIM,
+                premises=(26,),
+                term=Y,
+            ),
+            ProofStep(
+                Eq(
+                    Add(Mul(X, Y), Add(X, Y)),
+                    Add(Add(Mul(X, Y), X), Y),
+                ),
+                RULE_EQ_SYMMETRY,
+                premises=(27,),
+            ),
+            ProofStep(
+                Eq(
+                    Add(Add(Mul(X, Y), Y), X),
+                    Add(Mul(X, Y), Add(X, Y)),
+                ),
+                RULE_EQ_TRANSITIVITY,
+                premises=(20, 24),
+            ),
+            ProofStep(
+                Eq(
+                    Add(Add(Mul(X, Y), Y), X),
+                    Add(Add(Mul(X, Y), X), Y),
+                ),
+                RULE_EQ_TRANSITIVITY,
+                premises=(29, 28),
+            ),
+            ProofStep(
+                Eq(
+                    Succ(Add(Add(Mul(X, Y), Y), X)),
+                    Succ(Add(Add(Mul(X, Y), X), Y)),
+                ),
+                RULE_EQ_SUCC_CONGRUENCE,
+                premises=(30,),
+            ),
+            ProofStep(
+                Eq(
+                    Add(Add(Mul(X, Y), Y), Succ(X)),
+                    Succ(Add(Add(Mul(X, Y), X), Y)),
+                ),
+                RULE_EQ_TRANSITIVITY,
+                premises=(16, 31),
+            ),
+            ProofStep(
+                ForAll(
+                    Z,
+                    Eq(
+                        Add(Add(Mul(X, Y), X), Succ(Z)),
+                        Succ(Add(Add(Mul(X, Y), X), Z)),
+                    ),
+                ),
+                RULE_FORALL_ELIM,
+                premises=(14,),
+                term=Add(Mul(X, Y), X),
+            ),
+            ProofStep(
+                Eq(
+                    Add(Add(Mul(X, Y), X), Succ(Y)),
+                    Succ(Add(Add(Mul(X, Y), X), Y)),
+                ),
+                RULE_FORALL_ELIM,
+                premises=(33,),
+                term=Y,
+            ),
+            ProofStep(
+                Eq(
+                    Succ(Add(Add(Mul(X, Y), X), Y)),
+                    Add(Add(Mul(X, Y), X), Succ(Y)),
+                ),
+                RULE_EQ_SYMMETRY,
+                premises=(34,),
+            ),
+            ProofStep(
+                Eq(
+                    Add(Add(Mul(X, Y), Y), Succ(X)),
+                    Add(Add(Mul(X, Y), X), Succ(Y)),
+                ),
+                RULE_EQ_TRANSITIVITY,
+                premises=(32, 35),
+            ),
+            ProofStep(
+                ForAll(
+                    Z,
+                    Eq(Mul(X, Succ(Z)), Add(Mul(X, Z), X)),
+                ),
+                RULE_FORALL_ELIM,
+                premises=(9,),
+                term=X,
+            ),
+            ProofStep(
+                Eq(Mul(X, Succ(Y)), Add(Mul(X, Y), X)),
+                RULE_FORALL_ELIM,
+                premises=(37,),
+                term=Y,
+            ),
+            ProofStep(
+                Eq(
+                    Add(Mul(X, Succ(Y)), Succ(Y)),
+                    Add(Add(Mul(X, Y), X), Succ(Y)),
+                ),
+                RULE_EQ_ADD_LEFT_CONGRUENCE,
+                premises=(38,),
+                term=Succ(Y),
+            ),
+            ProofStep(
+                Eq(
+                    Add(Add(Mul(X, Y), X), Succ(Y)),
+                    Add(Mul(X, Succ(Y)), Succ(Y)),
+                ),
+                RULE_EQ_SYMMETRY,
+                premises=(39,),
+            ),
+            ProofStep(
+                left_succ_step,
+                RULE_EQ_TRANSITIVITY,
+                premises=(13, 36),
+            ),
+            ProofStep(
+                left_succ_step,
+                RULE_EQ_TRANSITIVITY,
+                premises=(41, 40),
+            ),
+            ProofStep(
+                ForAll(Y, left_succ_body),
+                RULE_INDUCTION,
+                premises=(7, 42),
+                variable=Y,
+                discharge=8,
+            ),
+            ProofStep(
+                ForAll(X, ForAll(Y, left_succ_body)),
+                RULE_FORALL_INTRO,
+                premises=(43,),
+                variable=X,
+            ),
+        ),
+    )
+    state.add_theorem("T11_MUL_SUCC_LEFT", proof_t11)
+
+    # T12: commutativity of multiplication.
+    mul_comm_body = Eq(Mul(X, Y), Mul(Y, X))
+    mul_comm_base = Eq(Mul(X, ZERO), Mul(ZERO, X))
+    mul_comm_step = Eq(Mul(X, Succ(Y)), Mul(Succ(Y), X))
+
+    proof_t12 = Proof(
+        statement=ForAll(X, ForAll(Y, mul_comm_body)),
+        steps=(
+            ProofStep(AXIOM_MUL_ZERO.formula, RULE_AXIOM, source=AXIOM_MUL_ZERO.name),
+            ProofStep(
+                Eq(Mul(X, ZERO), ZERO),
+                RULE_FORALL_ELIM,
+                premises=(0,),
+                term=X,
+            ),
+            ProofStep(
+                ForAll(Y, Eq(Mul(ZERO, Y), ZERO)),
+                RULE_THEOREM,
+                source="T9_ZERO_MUL_X",
+            ),
+            ProofStep(
+                Eq(Mul(ZERO, X), ZERO),
+                RULE_FORALL_ELIM,
+                premises=(2,),
+                term=X,
+            ),
+            ProofStep(
+                Eq(ZERO, Mul(ZERO, X)),
+                RULE_EQ_SYMMETRY,
+                premises=(3,),
+            ),
+            ProofStep(
+                mul_comm_base,
+                RULE_EQ_TRANSITIVITY,
+                premises=(1, 4),
+            ),
+            ProofStep(
+                mul_comm_body,
+                RULE_ASSUMPTION,
+                note="Induction hypothesis for multiplication commutativity.",
+            ),
+            ProofStep(
+                AXIOM_MUL_SUCCESSOR.formula,
+                RULE_AXIOM,
+                source=AXIOM_MUL_SUCCESSOR.name,
+            ),
+            ProofStep(
+                ForAll(
+                    Z,
+                    Eq(Mul(X, Succ(Z)), Add(Mul(X, Z), X)),
+                ),
+                RULE_FORALL_ELIM,
+                premises=(7,),
+                term=X,
+            ),
+            ProofStep(
+                Eq(Mul(X, Succ(Y)), Add(Mul(X, Y), X)),
+                RULE_FORALL_ELIM,
+                premises=(8,),
+                term=Y,
+            ),
+            ProofStep(
+                Eq(
+                    Add(Mul(X, Y), X),
+                    Add(Mul(Y, X), X),
+                ),
+                RULE_EQ_ADD_LEFT_CONGRUENCE,
+                premises=(6,),
+                term=X,
+            ),
+            ProofStep(
+                Eq(
+                    Mul(X, Succ(Y)),
+                    Add(Mul(Y, X), X),
+                ),
+                RULE_EQ_TRANSITIVITY,
+                premises=(9, 10),
+            ),
+            ProofStep(
+                ForAll(X, ForAll(Y, Eq(
+                    Mul(Succ(X), Y),
+                    Add(Mul(X, Y), Y),
+                ))),
+                RULE_THEOREM,
+                source="T11_MUL_SUCC_LEFT",
+            ),
+            ProofStep(
+                ForAll(Y, Eq(
+                    Mul(Succ(Y), Y),
+                    Add(Mul(Y, Y), Y),
+                )),
+                RULE_FORALL_ELIM,
+                premises=(12,),
+                term=Y,
+            ),
+            ProofStep(
+                Eq(
+                    Mul(Succ(Y), X),
+                    Add(Mul(Y, X), X),
+                ),
+                RULE_FORALL_ELIM,
+                premises=(13,),
+                term=X,
+            ),
+            ProofStep(
+                Eq(
+                    Add(Mul(Y, X), X),
+                    Mul(Succ(Y), X),
+                ),
+                RULE_EQ_SYMMETRY,
+                premises=(14,),
+            ),
+            ProofStep(
+                mul_comm_step,
+                RULE_EQ_TRANSITIVITY,
+                premises=(11, 15),
+            ),
+            ProofStep(
+                ForAll(Y, mul_comm_body),
+                RULE_INDUCTION,
+                premises=(5, 16),
+                variable=Y,
+                discharge=6,
+            ),
+            ProofStep(
+                ForAll(X, ForAll(Y, mul_comm_body)),
+                RULE_FORALL_INTRO,
+                premises=(17,),
+                variable=X,
+            ),
+        ),
+    )
+    state.add_theorem("T12_MUL_COMMUTATIVE", proof_t12)
+
+    # T13: right distributivity of multiplication over addition.
+    dist_body = Eq(
+        Mul(X, Add(Y, Z)),
+        Add(Mul(X, Y), Mul(X, Z)),
+    )
+    dist_base = Eq(
+        Mul(X, Add(Y, ZERO)),
+        Add(Mul(X, Y), Mul(X, ZERO)),
+    )
+    dist_step = Eq(
+        Mul(X, Add(Y, Succ(Z))),
+        Add(Mul(X, Y), Mul(X, Succ(Z))),
+    )
+
+    proof_t13 = Proof(
+        statement=ForAll(X, ForAll(Y, ForAll(Z, dist_body))),
+        steps=(
+            ProofStep(AXIOM_ADD_ZERO.formula, RULE_AXIOM, source=AXIOM_ADD_ZERO.name),
+            ProofStep(
+                Eq(Add(Y, ZERO), Y),
+                RULE_FORALL_ELIM,
+                premises=(0,),
+                term=Y,
+            ),
+            ProofStep(
+                Eq(Mul(X, Add(Y, ZERO)), Mul(X, Y)),
+                RULE_EQ_MUL_RIGHT_CONGRUENCE,
+                premises=(1,),
+                term=X,
+            ),
+            ProofStep(AXIOM_MUL_ZERO.formula, RULE_AXIOM, source=AXIOM_MUL_ZERO.name),
+            ProofStep(
+                Eq(Mul(X, ZERO), ZERO),
+                RULE_FORALL_ELIM,
+                premises=(3,),
+                term=X,
+            ),
+            ProofStep(
+                Eq(
+                    Add(Mul(X, Y), Mul(X, ZERO)),
+                    Add(Mul(X, Y), ZERO),
+                ),
+                RULE_EQ_ADD_RIGHT_CONGRUENCE,
+                premises=(4,),
+                term=Mul(X, Y),
+            ),
+            ProofStep(
+                Eq(Add(Mul(X, Y), ZERO), Mul(X, Y)),
+                RULE_FORALL_ELIM,
+                premises=(0,),
+                term=Mul(X, Y),
+            ),
+            ProofStep(
+                Eq(
+                    Add(Mul(X, Y), Mul(X, ZERO)),
+                    Mul(X, Y),
+                ),
+                RULE_EQ_TRANSITIVITY,
+                premises=(5, 6),
+            ),
+            ProofStep(
+                Eq(
+                    Mul(X, Y),
+                    Add(Mul(X, Y), Mul(X, ZERO)),
+                ),
+                RULE_EQ_SYMMETRY,
+                premises=(7,),
+            ),
+            ProofStep(
+                dist_base,
+                RULE_EQ_TRANSITIVITY,
+                premises=(2, 8),
+            ),
+            ProofStep(
+                dist_body,
+                RULE_ASSUMPTION,
+                note="Induction hypothesis for distributivity.",
+            ),
+            ProofStep(
+                AXIOM_ADD_SUCCESSOR.formula,
+                RULE_AXIOM,
+                source=AXIOM_ADD_SUCCESSOR.name,
+            ),
+            ProofStep(
+                ForAll(
+                    W,
+                    Eq(Add(Y, Succ(W)), Succ(Add(Y, W))),
+                ),
+                RULE_FORALL_ELIM,
+                premises=(11,),
+                term=Y,
+            ),
+            ProofStep(
+                Eq(Add(Y, Succ(Z)), Succ(Add(Y, Z))),
+                RULE_FORALL_ELIM,
+                premises=(12,),
+                term=Z,
+            ),
+            ProofStep(
+                Eq(
+                    Mul(X, Add(Y, Succ(Z))),
+                    Mul(X, Succ(Add(Y, Z))),
+                ),
+                RULE_EQ_MUL_RIGHT_CONGRUENCE,
+                premises=(13,),
+                term=X,
+            ),
+            ProofStep(
+                AXIOM_MUL_SUCCESSOR.formula,
+                RULE_AXIOM,
+                source=AXIOM_MUL_SUCCESSOR.name,
+            ),
+            ProofStep(
+                ForAll(
+                    W,
+                    Eq(Mul(X, Succ(W)), Add(Mul(X, W), X)),
+                ),
+                RULE_FORALL_ELIM,
+                premises=(15,),
+                term=X,
+            ),
+            ProofStep(
+                Eq(
+                    Mul(X, Succ(Add(Y, Z))),
+                    Add(Mul(X, Add(Y, Z)), X),
+                ),
+                RULE_FORALL_ELIM,
+                premises=(16,),
+                term=Add(Y, Z),
+            ),
+            ProofStep(
+                Eq(
+                    Mul(X, Add(Y, Succ(Z))),
+                    Add(Mul(X, Add(Y, Z)), X),
+                ),
+                RULE_EQ_TRANSITIVITY,
+                premises=(14, 17),
+            ),
+            ProofStep(
+                Eq(
+                    Add(Mul(X, Add(Y, Z)), X),
+                    Add(Add(Mul(X, Y), Mul(X, Z)), X),
+                ),
+                RULE_EQ_ADD_LEFT_CONGRUENCE,
+                premises=(10,),
+                term=X,
+            ),
+            ProofStep(
+                Eq(
+                    Mul(X, Add(Y, Succ(Z))),
+                    Add(Add(Mul(X, Y), Mul(X, Z)), X),
+                ),
+                RULE_EQ_TRANSITIVITY,
+                premises=(18, 19),
+            ),
+            ProofStep(
+                ForAll(X, ForAll(Z, ForAll(W, Eq(
+                    Add(Add(X, Z), W),
+                    Add(X, Add(Z, W)),
+                )))),
+                RULE_THEOREM,
+                source="T8_ADD_ASSOCIATIVE",
+            ),
+            ProofStep(
+                ForAll(Z, ForAll(W, Eq(
+                    Add(Add(Mul(X, Y), Z), W),
+                    Add(Mul(X, Y), Add(Z, W)),
+                ))),
+                RULE_FORALL_ELIM,
+                premises=(21,),
+                term=Mul(X, Y),
+            ),
+            ProofStep(
+                ForAll(W, Eq(
+                    Add(Add(Mul(X, Y), Mul(X, Z)), W),
+                    Add(Mul(X, Y), Add(Mul(X, Z), W)),
+                )),
+                RULE_FORALL_ELIM,
+                premises=(22,),
+                term=Mul(X, Z),
+            ),
+            ProofStep(
+                Eq(
+                    Add(Add(Mul(X, Y), Mul(X, Z)), X),
+                    Add(Mul(X, Y), Add(Mul(X, Z), X)),
+                ),
+                RULE_FORALL_ELIM,
+                premises=(23,),
+                term=X,
+            ),
+            ProofStep(
+                Eq(
+                    Mul(X, Add(Y, Succ(Z))),
+                    Add(Mul(X, Y), Add(Mul(X, Z), X)),
+                ),
+                RULE_EQ_TRANSITIVITY,
+                premises=(20, 24),
+            ),
+            ProofStep(
+                Eq(Mul(X, Succ(Z)), Add(Mul(X, Z), X)),
+                RULE_FORALL_ELIM,
+                premises=(16,),
+                term=Z,
+            ),
+            ProofStep(
+                Eq(
+                    Add(Mul(X, Y), Mul(X, Succ(Z))),
+                    Add(Mul(X, Y), Add(Mul(X, Z), X)),
+                ),
+                RULE_EQ_ADD_RIGHT_CONGRUENCE,
+                premises=(26,),
+                term=Mul(X, Y),
+            ),
+            ProofStep(
+                Eq(
+                    Add(Mul(X, Y), Add(Mul(X, Z), X)),
+                    Add(Mul(X, Y), Mul(X, Succ(Z))),
+                ),
+                RULE_EQ_SYMMETRY,
+                premises=(27,),
+            ),
+            ProofStep(
+                dist_step,
+                RULE_EQ_TRANSITIVITY,
+                premises=(25, 28),
+            ),
+            ProofStep(
+                ForAll(Z, dist_body),
+                RULE_INDUCTION,
+                premises=(9, 29),
+                variable=Z,
+                discharge=10,
+            ),
+            ProofStep(
+                ForAll(Y, ForAll(Z, dist_body)),
+                RULE_FORALL_INTRO,
+                premises=(30,),
+                variable=Y,
+            ),
+            ProofStep(
+                ForAll(X, ForAll(Y, ForAll(Z, dist_body))),
+                RULE_FORALL_INTRO,
+                premises=(31,),
+                variable=X,
+            ),
+        ),
+    )
+    state.add_theorem("T13_MUL_DISTRIBUTIVE", proof_t13)
+
+    # T14: associativity of multiplication.
+    mul_assoc_body = Eq(
+        Mul(Mul(X, Y), Z),
+        Mul(X, Mul(Y, Z)),
+    )
+    mul_assoc_base = Eq(
+        Mul(Mul(X, Y), ZERO),
+        Mul(X, Mul(Y, ZERO)),
+    )
+    mul_assoc_step = Eq(
+        Mul(Mul(X, Y), Succ(Z)),
+        Mul(X, Mul(Y, Succ(Z))),
+    )
+
+    proof_t14 = Proof(
+        statement=ForAll(X, ForAll(Y, ForAll(Z, mul_assoc_body))),
+        steps=(
+            ProofStep(AXIOM_MUL_ZERO.formula, RULE_AXIOM, source=AXIOM_MUL_ZERO.name),
+            ProofStep(
+                Eq(Mul(Mul(X, Y), ZERO), ZERO),
+                RULE_FORALL_ELIM,
+                premises=(0,),
+                term=Mul(X, Y),
+            ),
+            ProofStep(
+                Eq(Mul(Y, ZERO), ZERO),
+                RULE_FORALL_ELIM,
+                premises=(0,),
+                term=Y,
+            ),
+            ProofStep(
+                Eq(
+                    Mul(X, Mul(Y, ZERO)),
+                    Mul(X, ZERO),
+                ),
+                RULE_EQ_MUL_RIGHT_CONGRUENCE,
+                premises=(2,),
+                term=X,
+            ),
+            ProofStep(
+                Eq(Mul(X, ZERO), ZERO),
+                RULE_FORALL_ELIM,
+                premises=(0,),
+                term=X,
+            ),
+            ProofStep(
+                Eq(Mul(X, Mul(Y, ZERO)), ZERO),
+                RULE_EQ_TRANSITIVITY,
+                premises=(3, 4),
+            ),
+            ProofStep(
+                Eq(ZERO, Mul(X, Mul(Y, ZERO))),
+                RULE_EQ_SYMMETRY,
+                premises=(5,),
+            ),
+            ProofStep(
+                mul_assoc_base,
+                RULE_EQ_TRANSITIVITY,
+                premises=(1, 6),
+            ),
+            ProofStep(
+                mul_assoc_body,
+                RULE_ASSUMPTION,
+                note="Induction hypothesis for multiplication associativity.",
+            ),
+            ProofStep(
+                AXIOM_MUL_SUCCESSOR.formula,
+                RULE_AXIOM,
+                source=AXIOM_MUL_SUCCESSOR.name,
+            ),
+            ProofStep(
+                ForAll(
+                    W,
+                    Eq(
+                        Mul(Mul(X, Y), Succ(W)),
+                        Add(Mul(Mul(X, Y), W), Mul(X, Y)),
+                    ),
+                ),
+                RULE_FORALL_ELIM,
+                premises=(9,),
+                term=Mul(X, Y),
+            ),
+            ProofStep(
+                Eq(
+                    Mul(Mul(X, Y), Succ(Z)),
+                    Add(Mul(Mul(X, Y), Z), Mul(X, Y)),
+                ),
+                RULE_FORALL_ELIM,
+                premises=(10,),
+                term=Z,
+            ),
+            ProofStep(
+                Eq(
+                    Add(Mul(Mul(X, Y), Z), Mul(X, Y)),
+                    Add(Mul(X, Mul(Y, Z)), Mul(X, Y)),
+                ),
+                RULE_EQ_ADD_LEFT_CONGRUENCE,
+                premises=(8,),
+                term=Mul(X, Y),
+            ),
+            ProofStep(
+                Eq(
+                    Mul(Mul(X, Y), Succ(Z)),
+                    Add(Mul(X, Mul(Y, Z)), Mul(X, Y)),
+                ),
+                RULE_EQ_TRANSITIVITY,
+                premises=(11, 12),
+            ),
+            ProofStep(
+                ForAll(
+                    W,
+                    Eq(Mul(Y, Succ(W)), Add(Mul(Y, W), Y)),
+                ),
+                RULE_FORALL_ELIM,
+                premises=(9,),
+                term=Y,
+            ),
+            ProofStep(
+                Eq(Mul(Y, Succ(Z)), Add(Mul(Y, Z), Y)),
+                RULE_FORALL_ELIM,
+                premises=(14,),
+                term=Z,
+            ),
+            ProofStep(
+                Eq(
+                    Mul(X, Mul(Y, Succ(Z))),
+                    Mul(X, Add(Mul(Y, Z), Y)),
+                ),
+                RULE_EQ_MUL_RIGHT_CONGRUENCE,
+                premises=(15,),
+                term=X,
+            ),
+            ProofStep(
+                ForAll(X, ForAll(Y, ForAll(Z, Eq(
+                    Mul(X, Add(Y, Z)),
+                    Add(Mul(X, Y), Mul(X, Z)),
+                )))),
+                RULE_THEOREM,
+                source="T13_MUL_DISTRIBUTIVE",
+            ),
+            ProofStep(
+                ForAll(Y, ForAll(Z, Eq(
+                    Mul(X, Add(Y, Z)),
+                    Add(Mul(X, Y), Mul(X, Z)),
+                ))),
+                RULE_FORALL_ELIM,
+                premises=(17,),
+                term=X,
+            ),
+            ProofStep(
+                ForAll(Z, Eq(
+                    Mul(X, Add(Mul(Y, Z), Z)),
+                    Add(Mul(X, Mul(Y, Z)), Mul(X, Z)),
+                )),
+                RULE_FORALL_ELIM,
+                premises=(18,),
+                term=Mul(Y, Z),
+            ),
+            ProofStep(
+                Eq(
+                    Mul(X, Add(Mul(Y, Z), Y)),
+                    Add(Mul(X, Mul(Y, Z)), Mul(X, Y)),
+                ),
+                RULE_FORALL_ELIM,
+                premises=(19,),
+                term=Y,
+            ),
+            ProofStep(
+                Eq(
+                    Mul(X, Mul(Y, Succ(Z))),
+                    Add(Mul(X, Mul(Y, Z)), Mul(X, Y)),
+                ),
+                RULE_EQ_TRANSITIVITY,
+                premises=(16, 20),
+            ),
+            ProofStep(
+                Eq(
+                    Add(Mul(X, Mul(Y, Z)), Mul(X, Y)),
+                    Mul(X, Mul(Y, Succ(Z))),
+                ),
+                RULE_EQ_SYMMETRY,
+                premises=(21,),
+            ),
+            ProofStep(
+                mul_assoc_step,
+                RULE_EQ_TRANSITIVITY,
+                premises=(13, 22),
+            ),
+            ProofStep(
+                ForAll(Z, mul_assoc_body),
+                RULE_INDUCTION,
+                premises=(7, 23),
+                variable=Z,
+                discharge=8,
+            ),
+            ProofStep(
+                ForAll(Y, ForAll(Z, mul_assoc_body)),
+                RULE_FORALL_INTRO,
+                premises=(24,),
+                variable=Y,
+            ),
+            ProofStep(
+                ForAll(X, ForAll(Y, ForAll(Z, mul_assoc_body))),
+                RULE_FORALL_INTRO,
+                premises=(25,),
+                variable=X,
+            ),
+        ),
+    )
+    state.add_theorem("T14_MUL_ASSOCIATIVE", proof_t14)
+
     return state
 
 
@@ -1787,8 +2781,8 @@ def print_world() -> None:
         print(f"  - {rule.name}")
 
 
-def phase6_demo() -> None:
-    print("Gareen Phase 6")
+def phase7_demo() -> None:
+    print("Gareen Phase 7")
     print("================")
     print_world()
 
@@ -1818,4 +2812,4 @@ def phase6_demo() -> None:
 
 
 if __name__ == "__main__":
-    phase6_demo()
+    phase7_demo()
