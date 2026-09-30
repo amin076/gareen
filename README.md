@@ -1,8 +1,40 @@
 # Gareen
 
-Gareen is a small research project for exploring whether a machine can grow formal mathematical knowledge from a deliberately limited symbolic world.
+Gareen is a research project for exploring whether a machine can grow formal mathematical knowledge while keeping conjecture generation, proof search, and formal verification clearly separated.
 
-The host computer and the mathematical object-world are kept separate. Python may use ordinary arithmetic, Boolean logic, memory, and control flow to execute the program, but mathematical knowledge is accepted by Gareen only when it is represented inside the formal world and passes the proof checker.
+**Phase 12 changes the architecture substantially:** Gareen no longer aims to grow its Python proof checker into a replacement for mature theorem-proving infrastructure. The Python formal world remains a transparent research sandbox, while **Lean 4 + Mathlib become the production-grade formal backend and trust boundary**.
+
+Current trust path:
+
+```text
+Gareen research layer (Python)
+        ↓
+Python → Lean translation
+        ↓
+proof candidate provider
+        ↓
+Lean 4 + Mathlib
+        ↓
+Lean kernel
+        ↓
+verified mathematical record
+```
+
+The project is pinned to Lean 4.34.0 and Mathlib v4.34.0. See `docs/LEAN_TRANSFORMATION.md` for the migration architecture.
+
+## Phase 12 — Lean transformation
+
+This phase combines several migration steps:
+
+- **12A:** Lean/Mathlib project foundation.
+- **12B:** translation of Gareen's arithmetic AST into Lean propositions over `Nat`.
+- **12C:** a Lean verification gateway driven from Python.
+- **12D:** dual CI for the Python research sandbox and Lean kernel.
+- **12E:** a prover-provider interface for future BFS-Prover-V2, Discover-and-Prove, and other Lean-compatible systems.
+
+The first provider is deliberately local and zero-cost: `simp`, `omega`, `ring`, `norm_num`, and `aesop`. These tactics only propose proofs; Lean decides whether each theorem is accepted.
+
+The old Phase 11 Artificial Mathematician remains available as the research layer that generates conjectures and strategies. Its outputs can now be sent to Lean rather than requiring Gareen to keep reimplementing low-level proving infrastructure.
 
 ## Phase 11 — Artificial Mathematician prototype
 
