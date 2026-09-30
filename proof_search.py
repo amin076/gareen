@@ -149,11 +149,13 @@ class BoundedProofSearcher:
         max_terms: int = 48,
         instantiation_rounds: int = 1,
         max_direct_facts: int = 5000,
+        allow_open_goals: bool = False,
     ) -> None:
         self.max_depth = max_depth
         self.max_terms = max_terms
         self.instantiation_rounds = instantiation_rounds
         self.max_direct_facts = max_direct_facts
+        self.allow_open_goals = allow_open_goals
 
         self._direct: dict[Formula, Derivation] = {}
         self._candidate_terms: tuple[Expr, ...] = ()
@@ -162,9 +164,12 @@ class BoundedProofSearcher:
 
     def prove(self, goal: Formula, state: KnowledgeState) -> SearchResult:
         goal_terms = _formula_terms(goal)
-        if any(not _is_ground(term) for term in goal_terms):
+        if (
+            not self.allow_open_goals
+            and any(not _is_ground(term) for term in goal_terms)
+        ):
             raise ValueError(
-                "Phase 8 search currently accepts only closed/ground goals"
+                "This searcher is configured for closed/ground goals only"
             )
 
         terms = {
@@ -194,7 +199,7 @@ class BoundedProofSearcher:
                 expanded |= {
                     term
                     for term in _formula_terms(formula)
-                    if _is_ground(term)
+                    if self.allow_open_goals or _is_ground(term)
                 }
 
             ordered_expanded = self._ordered_terms(expanded)
