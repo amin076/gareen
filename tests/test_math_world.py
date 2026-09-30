@@ -1,18 +1,48 @@
 import unittest
 
 from math_world import (
-    ADD_SUCC, ADD_ZERO, ARITHMETIC_PRIMITIVES,
-    AXIOM_ADD_SUCCESSOR, AXIOM_ADD_ZERO, AXIOM_S_INJECTIVE, AXIOM_S_NONZERO,
-    DEFINITIONS, LOGICAL_PRIMITIVES, ONE, THREE, TWO,
-    Add, Succ, ZERO, normalize, rewrite_once,
+    ADD_SUCC,
+    ADD_ZERO,
+    ARITHMETIC_PRIMITIVES,
+    AXIOM_ADD_SUCCESSOR,
+    AXIOM_ADD_ZERO,
+    AXIOM_S_INJECTIVE,
+    AXIOM_S_NONZERO,
+    DEFINITIONS,
+    INFERENCE_RULES,
+    LOGICAL_PRIMITIVES,
+    ONE,
+    RULE_ASSUMPTION,
+    RULE_AXIOM,
+    RULE_FORALL_ELIM,
+    THREE,
+    TWO,
+    Add,
+    Eq,
+    Not,
+    Proof,
+    ProofStep,
+    Succ,
+    ZERO,
+    build_initial_knowledge,
+    check_proof,
+    normalize,
+    rewrite_once,
 )
+
 
 class FormalWorldTests(unittest.TestCase):
     def test_arithmetic_primitives_are_explicit(self):
-        self.assertEqual([x.name for x in ARITHMETIC_PRIMITIVES], ["0", "S", "Add"])
+        self.assertEqual(
+            [x.name for x in ARITHMETIC_PRIMITIVES],
+            ["0", "S", "Add"],
+        )
 
-    def test_equality_is_logical_primitive(self):
-        self.assertEqual([x.name for x in LOGICAL_PRIMITIVES], ["="])
+    def test_logical_primitives_are_explicit(self):
+        self.assertEqual(
+            [x.name for x in LOGICAL_PRIMITIVES],
+            ["=", "¬", "→", "∀", "⊥"],
+        )
 
     def test_numerals_are_definitions_not_primitives(self):
         self.assertEqual([x.name for x in DEFINITIONS], ["1", "2", "3"])
@@ -25,6 +55,121 @@ class FormalWorldTests(unittest.TestCase):
         self.assertIn("S(y)", str(AXIOM_S_INJECTIVE))
         self.assertIn("Add(x, 0)", str(AXIOM_ADD_ZERO))
         self.assertIn("Add(x, S(y))", str(AXIOM_ADD_SUCCESSOR))
+
+    def test_inference_rules_are_declared(self):
+        names = [rule.name for rule in INFERENCE_RULES]
+        self.assertIn("FORALL_ELIM", names)
+        self.assertIn("MODUS_PONENS", names)
+        self.assertIn("NEGATION_INTRO", names)
+
+
+class ProofEngineTests(unittest.TestCase):
+    def test_direct_universal_instance_is_verified(self):
+        statement = Not(Eq(ONE, ZERO))
+        proof = Proof(
+            statement=statement,
+            steps=(
+                ProofStep(
+                    conclusion=AXIOM_S_NONZERO.formula,
+                    rule=RULE_AXIOM,
+                    source=AXIOM_S_NONZERO.name,
+                ),
+                ProofStep(
+                    conclusion=statement,
+                    rule=RULE_FORALL_ELIM,
+                    premises=(0,),
+                    term=ZERO,
+                ),
+            ),
+        )
+
+        result = check_proof(proof)
+        self.assertTrue(result.valid, result.errors)
+        self.assertEqual(result.open_assumptions, frozenset())
+
+    def test_open_assumption_is_rejected(self):
+        assumption = Eq(ONE, TWO)
+        proof = Proof(
+            statement=assumption,
+            steps=(
+                ProofStep(
+                    conclusion=assumption,
+                    rule=RULE_ASSUMPTION,
+                ),
+            ),
+        )
+
+        result = check_proof(proof)
+        self.assertFalse(result.valid)
+        self.assertIn("open assumptions", " ".join(result.errors))
+
+    def test_fake_axiom_reference_is_rejected(self):
+        proof = Proof(
+            statement=Eq(ONE, ONE),
+            steps=(
+                ProofStep(
+                    conclusion=Eq(ONE, ONE),
+                    rule=RULE_AXIOM,
+                    source="NOT_A_REAL_AXIOM",
+                ),
+            ),
+        )
+
+        result = check_proof(proof)
+        self.assertFalse(result.valid)
+
+    def test_initial_knowledge_contains_verified_theorems(self):
+        state = build_initial_knowledge()
+
+        self.assertEqual(
+            list(state.theorems),
+            [
+                "T1_ONE_NONZERO",
+                "T2_ONE_NE_TWO",
+                "T3_TWO_NE_THREE",
+                "T4_TWO_PLUS_ZERO",
+            ],
+        )
+        self.assertEqual(
+            state.theorems["T1_ONE_NONZERO"].statement,
+            Not(Eq(ONE, ZERO)),
+        )
+        self.assertEqual(
+            state.theorems["T2_ONE_NE_TWO"].statement,
+            Not(Eq(ONE, TWO)),
+        )
+        self.assertEqual(
+            state.theorems["T3_TWO_NE_THREE"].statement,
+            Not(Eq(TWO, THREE)),
+        )
+        self.assertEqual(
+            state.theorems["T4_TWO_PLUS_ZERO"].statement,
+            Eq(Add(TWO, ZERO), TWO),
+        )
+
+    def test_later_theorem_depends_on_earlier_theorem(self):
+        state = build_initial_knowledge()
+
+        self.assertIn(
+            "T2_ONE_NE_TWO",
+            state.theorems["T3_TWO_NE_THREE"].dependencies,
+        )
+
+    def test_all_initial_theorem_proofs_recheck(self):
+        state = build_initial_knowledge()
+        accepted = []
+
+        for theorem in state.theorems.values():
+            result = check_proof(
+                theorem.proof,
+                known_theorems=tuple(
+                    state.theorems[name]
+                    for name in accepted
+                ),
+            )
+            self.assertTrue(result.valid, (theorem.name, result.errors))
+            accepted.append(theorem.name)
+
 
 class SymbolicArithmeticTests(unittest.TestCase):
     def test_add_zero_rule(self):
@@ -50,6 +195,7 @@ class SymbolicArithmeticTests(unittest.TestCase):
         result, trace = normalize(THREE)
         self.assertEqual(result, THREE)
         self.assertEqual(trace, ())
+
 
 if __name__ == "__main__":
     unittest.main()
