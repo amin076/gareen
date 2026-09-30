@@ -1,56 +1,66 @@
 # Gareen
 
-**Gareen** is an experiment about machine-grown formal mathematics.
+Gareen is a small research project for exploring whether a machine can grow formal mathematical knowledge from a deliberately limited symbolic world.
 
-Phase 1 deliberately starts tiny. There is no LLM, no agent, no Lean, and no attempt to model modern number theory yet. The goal is to establish one clean boundary:
+The project starts with the smallest useful experiment: define mathematical objects and legal transformations explicitly, execute them symbolically, and keep every derivation auditable.
 
-> The host computer may use its own arithmetic to run Python, but the mathematical world being studied must manipulate its own symbols and rules instead of asking Python to solve the arithmetic for it.
+## Phase 1 — Symbolic Arithmetic Core
 
-## Phase 1 — symbolic arithmetic core
+Phase 1 contains no LLM, no agents, no Lean, and no modern number-theory library.
 
-The object-world contains only:
+The object-world currently knows only:
 
-- `0` — a symbolic zero
+- `0` — symbolic zero
 - `S(x)` — symbolic successor
 - `Add(a, b)` — symbolic addition
-- two recursive rewrite rules for addition
-
-The rules are:
+- two explicit recursive rewrite rules
 
 ```text
 Add(a, 0)    -> a
 Add(a, S(b)) -> S(Add(a, b))
 ```
 
-For example, the program represents what humans call two plus three as:
+For example, what humans call `2 + 3` is represented inside Gareen as:
 
 ```text
 Add(S(S(0)), S(S(S(0))))
 ```
 
-It then reaches:
+and is reduced only through the declared object-world rules until it reaches:
 
 ```text
 S(S(S(S(S(0)))))
 ```
 
-only by applying the two declared object-world rules. It does **not** evaluate `2 + 3` with Python arithmetic.
+The object-world does not ask Python to evaluate `2 + 3`.
 
-## Why this matters
+## Meta-level vs object-level
 
-Python still uses CPU arithmetic, Boolean logic, memory addresses, loops, and many other mathematical structures at the **meta-level**. That cannot and need not be removed.
-
-The experiment instead separates:
+Gareen intentionally separates two layers:
 
 ```text
-host / meta-level
-    Python, CPU, memory, control flow
+Host / meta-level
+  Python, CPU, memory, loops, data structures
 
-object / mathematical level
-    Zero, Succ, Add, declared inference/rewrite rules
+Mathematical / object-level
+  Zero, Succ, Add, declared formal rules
 ```
 
-A result counts as derived in Gareen only when its trace is built from the object-world rules.
+The host machine inevitably uses its own arithmetic and Boolean logic to execute the program. That is not treated as mathematical knowledge available to the symbolic world.
+
+A result counts as derived in Gareen only when its trace is built from rules explicitly declared inside the object-world.
+
+## Current structure
+
+```text
+gareen/
+├─ math_world.py
+├─ tests/
+│  └─ test_math_world.py
+├─ README.md
+├─ LICENSE
+└─ .gitignore
+```
 
 ## Run
 
@@ -60,23 +70,38 @@ Requires Python 3.10+ and no third-party packages.
 python math_world.py
 ```
 
-Run tests:
+Run the tests with:
 
 ```bash
 python -m unittest discover -s tests -v
 ```
 
-## What Phase 1 proves — and does not prove
+## What Phase 1 establishes
 
-Phase 1 demonstrates that we can build a small symbolic mathematical world whose arithmetic transformations are explicit and auditable.
+Phase 1 establishes a minimal symbolic environment in which:
 
-It does **not** yet:
+- mathematical objects are represented explicitly;
+- legal transformations are declared explicitly;
+- each transformation can be traced;
+- host-language arithmetic is not used as an object-world proof step.
 
-- discover new theorems
-- implement quantified logic or induction
-- distinguish interesting from trivial theorems
-- use Peano Arithmetic in full
-- use Lean or another proof assistant
-- use Qwen, LLMs, or multi-agent search
+It does not yet attempt to discover theorems.
 
-Those belong to later experiments only after this core boundary is trustworthy.
+## Next direction
+
+The next milestone is to move from expression rewriting to a small formal knowledge state containing:
+
+```text
+statement
+proof
+dependencies
+knowledge state
+```
+
+Only after that foundation is reliable will it make sense to experiment with theorem generation, proof search, Lean verification, LLMs, or multi-agent exploration.
+
+## Research question
+
+The long-term question behind Gareen is:
+
+> Can a machine autonomously expand a bounded formal mathematical knowledge state while every accepted result remains explicitly derivable and auditable?
