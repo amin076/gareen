@@ -15,6 +15,7 @@ from math_world import (
     RULE_ASSUMPTION,
     RULE_AXIOM,
     RULE_FORALL_ELIM,
+    RULE_FORALL_INTRO,
     RULE_INDUCTION,
     THREE,
     TWO,
@@ -26,6 +27,8 @@ from math_world import (
     ProofStep,
     Succ,
     X,
+    Y,
+    Z,
     ZERO,
     build_initial_knowledge,
     check_proof,
@@ -62,6 +65,7 @@ class FormalWorldTests(unittest.TestCase):
     def test_inference_rules_are_declared(self):
         names = [rule.name for rule in INFERENCE_RULES]
         self.assertIn("FORALL_ELIM", names)
+        self.assertIn("FORALL_INTRO", names)
         self.assertIn("MODUS_PONENS", names)
         self.assertIn("NEGATION_INTRO", names)
         self.assertIn("EQ_SUCC_CONGRUENCE", names)
@@ -135,6 +139,8 @@ class ProofEngineTests(unittest.TestCase):
                 "T3_TWO_NE_THREE",
                 "T4_TWO_PLUS_ZERO",
                 "T5_ZERO_PLUS_X",
+                "T6_SUCC_ADD",
+                "T7_ADD_COMMUTATIVE",
             ],
         )
         self.assertEqual(
@@ -156,6 +162,26 @@ class ProofEngineTests(unittest.TestCase):
         self.assertEqual(
             state.theorems["T5_ZERO_PLUS_X"].statement,
             ForAll(X, Eq(Add(ZERO, X), X)),
+        )
+        self.assertEqual(
+            state.theorems["T6_SUCC_ADD"].statement,
+            ForAll(
+                X,
+                ForAll(
+                    Z,
+                    Eq(Add(Succ(X), Z), Succ(Add(X, Z))),
+                ),
+            ),
+        )
+        self.assertEqual(
+            state.theorems["T7_ADD_COMMUTATIVE"].statement,
+            ForAll(
+                X,
+                ForAll(
+                    Y,
+                    Eq(Add(X, Y), Add(Y, X)),
+                ),
+            ),
         )
 
     def test_induction_theorem_depends_on_addition_axioms(self):
@@ -199,6 +225,35 @@ class ProofEngineTests(unittest.TestCase):
         result = check_proof(proof)
         self.assertFalse(result.valid)
         self.assertIn("base case", " ".join(result.errors))
+
+    def test_invalid_forall_intro_from_open_assumption_is_rejected(self):
+        assumption = Eq(X, ZERO)
+        proof = Proof(
+            statement=ForAll(X, assumption),
+            steps=(
+                ProofStep(
+                    conclusion=assumption,
+                    rule=RULE_ASSUMPTION,
+                ),
+                ProofStep(
+                    conclusion=ForAll(X, assumption),
+                    rule=RULE_FORALL_INTRO,
+                    premises=(0,),
+                    variable=X,
+                ),
+            ),
+        )
+
+        result = check_proof(proof)
+        self.assertFalse(result.valid)
+        self.assertIn("free in open assumption", " ".join(result.errors))
+
+    def test_commutativity_depends_on_prior_general_theorems(self):
+        state = build_initial_knowledge()
+        dependencies = state.theorems["T7_ADD_COMMUTATIVE"].dependencies
+
+        self.assertIn("T5_ZERO_PLUS_X", dependencies)
+        self.assertIn("T6_SUCC_ADD", dependencies)
 
     def test_later_theorem_depends_on_earlier_theorem(self):
         state = build_initial_knowledge()
