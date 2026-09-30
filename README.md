@@ -4,7 +4,7 @@ Gareen is a small research project for exploring whether a machine can grow form
 
 The host computer and the mathematical object-world are kept separate. Python may use ordinary arithmetic, Boolean logic, memory, and control flow to execute the program, but mathematical knowledge is accepted by Gareen only when it is represented inside the formal world and passes the proof checker.
 
-## Phase 6 — Addition associativity and recursive multiplication
+## Phase 7 — Core multiplication laws
 
 Gareen now distinguishes:
 
@@ -18,7 +18,7 @@ verified theorems
 knowledge state
 ```
 
-Gareen now derives both commutativity and associativity of addition, introduces multiplication as a new primitive operation with recursive axioms, and proves its first non-axiomatic laws. Universal instantiation also rejects substitutions that would capture a free variable.
+Gareen now derives the main algebraic laws of multiplication from the recursive multiplication axioms and previously verified addition theorems. The proof graph now contains multi-stage dependencies rather than isolated arithmetic facts.
 
 ### Arithmetic primitives
 
@@ -247,6 +247,56 @@ T10_MUL_ONE
 
 Notice the asymmetry: `x × 0 = 0` is an axiom, while `0 × x = 0` is a theorem proved by induction.
 
+### Core multiplication laws
+
+Gareen first proves the helper lemma:
+
+```text
+T11_MUL_SUCC_LEFT
+∀x∀v. S(x) × v = (x × v) + v
+```
+
+That lemma is then reused to prove multiplication commutativity:
+
+```text
+T12_MUL_COMMUTATIVE
+∀x∀z. x × z = z × x
+```
+
+Next, Gareen derives right distributivity:
+
+```text
+T13_MUL_DISTRIBUTIVE
+∀x∀u∀v. x × (u + v) = (x × u) + (x × v)
+```
+
+Finally, distributivity becomes a dependency of multiplication associativity:
+
+```text
+T14_MUL_ASSOCIATIVE
+∀x∀u∀w. (x × u) × w = x × (u × w)
+```
+
+The dependency chain now includes:
+
+```text
+addition axioms
+      ↓
+addition theorems
+      ↓
+T11 left-successor multiplication
+      ↓
+T12 multiplication commutativity
+
+T8 addition associativity
+      ↓
+T13 multiplication distributivity
+      ↓
+T14 multiplication associativity
+```
+
+None of these four multiplication laws is inserted as a new arithmetic axiom.
+
 ### Capture-safe universal instantiation
 
 `FORALL_ELIM` now checks whether substituting a term would accidentally capture one of its free variables under an inner quantifier. Gareen rejects such a proof step instead of silently accepting an invalid substitution.
@@ -339,15 +389,18 @@ Those should be added gradually, only after each lower layer is testable and aud
 
 ## Next milestone
 
-The next mathematically meaningful targets are multiplication laws:
+The next useful step is no longer another familiar school-arithmetic identity. Gareen should begin separating **proof construction** from manually written proof scripts.
+
+A first search layer can:
 
 ```text
-x × y = y × x
-(x × y) × z = x × (y × z)
-x × (y + z) = (x × y) + (x × z)
+generate candidate proof steps
+check each step with the trusted proof checker
+retain only verified theorems
+record dependencies and failed attempts
 ```
 
-Those should be derived from A5/A6 and the already verified addition theorems, rather than inserted as new axioms.
+That would be the transition from a hand-authored formal library toward autonomous theorem search, while keeping the verifier deterministic and auditable.
 
 ## Research question
 
