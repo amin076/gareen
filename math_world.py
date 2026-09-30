@@ -60,6 +60,8 @@ X = Var("x")
 Y = Var("y")
 Z = Var("z")
 W = Var("w")
+V = Var("v")
+U = Var("u")
 
 
 class Formula:
@@ -1814,20 +1816,20 @@ def build_initial_knowledge() -> KnowledgeState:
 
     # T11: successor in the left factor.
     left_succ_body = Eq(
-        Mul(Succ(X), Z),
-        Add(Mul(X, Z), Z),
+        Mul(Succ(X), V),
+        Add(Mul(X, V), V),
     )
     left_succ_base = Eq(
         Mul(Succ(X), ZERO),
         Add(Mul(X, ZERO), ZERO),
     )
     left_succ_step = Eq(
-        Mul(Succ(X), Succ(Z)),
-        Add(Mul(X, Succ(Z)), Succ(Z)),
+        Mul(Succ(X), Succ(V)),
+        Add(Mul(X, Succ(V)), Succ(V)),
     )
 
     proof_t11 = Proof(
-        statement=ForAll(X, ForAll(Z, left_succ_body)),
+        statement=ForAll(X, ForAll(V, left_succ_body)),
         steps=(
             ProofStep(AXIOM_MUL_ZERO.formula, RULE_AXIOM, source=AXIOM_MUL_ZERO.name),
             ProofStep(
@@ -1859,11 +1861,7 @@ def build_initial_knowledge() -> KnowledgeState:
                 RULE_EQ_SYMMETRY,
                 premises=(5,),
             ),
-            ProofStep(
-                left_succ_base,
-                RULE_EQ_TRANSITIVITY,
-                premises=(1, 6),
-            ),
+            ProofStep(left_succ_base, RULE_EQ_TRANSITIVITY, premises=(1, 6)),
             ProofStep(
                 left_succ_body,
                 RULE_ASSUMPTION,
@@ -1876,10 +1874,10 @@ def build_initial_knowledge() -> KnowledgeState:
             ),
             ProofStep(
                 ForAll(
-                    W,
+                    Y,
                     Eq(
-                        Mul(Succ(X), Succ(W)),
-                        Add(Mul(Succ(X), W), Succ(X)),
+                        Mul(Succ(X), Succ(Y)),
+                        Add(Mul(Succ(X), Y), Succ(X)),
                     ),
                 ),
                 RULE_FORALL_ELIM,
@@ -1888,17 +1886,17 @@ def build_initial_knowledge() -> KnowledgeState:
             ),
             ProofStep(
                 Eq(
-                    Mul(Succ(X), Succ(Z)),
-                    Add(Mul(Succ(X), Z), Succ(X)),
+                    Mul(Succ(X), Succ(V)),
+                    Add(Mul(Succ(X), V), Succ(X)),
                 ),
                 RULE_FORALL_ELIM,
                 premises=(10,),
-                term=Z,
+                term=V,
             ),
             ProofStep(
                 Eq(
-                    Add(Mul(Succ(X), Z), Succ(X)),
-                    Add(Add(Mul(X, Z), Z), Succ(X)),
+                    Add(Mul(Succ(X), V), Succ(X)),
+                    Add(Add(Mul(X, V), V), Succ(X)),
                 ),
                 RULE_EQ_ADD_LEFT_CONGRUENCE,
                 premises=(8,),
@@ -1906,8 +1904,8 @@ def build_initial_knowledge() -> KnowledgeState:
             ),
             ProofStep(
                 Eq(
-                    Mul(Succ(X), Succ(Z)),
-                    Add(Add(Mul(X, Z), Z), Succ(X)),
+                    Mul(Succ(X), Succ(V)),
+                    Add(Add(Mul(X, V), V), Succ(X)),
                 ),
                 RULE_EQ_TRANSITIVITY,
                 premises=(11, 12),
@@ -1919,20 +1917,20 @@ def build_initial_knowledge() -> KnowledgeState:
             ),
             ProofStep(
                 ForAll(
-                    W,
+                    Y,
                     Eq(
-                        Add(Add(Mul(X, Z), Z), Succ(W)),
-                        Succ(Add(Add(Mul(X, Z), Z), W)),
+                        Add(Add(Mul(X, V), V), Succ(Y)),
+                        Succ(Add(Add(Mul(X, V), V), Y)),
                     ),
                 ),
                 RULE_FORALL_ELIM,
                 premises=(14,),
-                term=Add(Mul(X, Z), Z),
+                term=Add(Mul(X, V), V),
             ),
             ProofStep(
                 Eq(
-                    Add(Add(Mul(X, Z), Z), Succ(X)),
-                    Succ(Add(Add(Mul(X, Z), Z), X)),
+                    Add(Add(Mul(X, V), V), Succ(X)),
+                    Succ(Add(Add(Mul(X, V), V), X)),
                 ),
                 RULE_FORALL_ELIM,
                 premises=(15,),
@@ -1948,26 +1946,26 @@ def build_initial_knowledge() -> KnowledgeState:
             ),
             ProofStep(
                 ForAll(Z, ForAll(W, Eq(
-                    Add(Add(Mul(X, Z), Z), W),
-                    Add(Mul(X, Z), Add(Z, W)),
+                    Add(Add(Mul(X, V), Z), W),
+                    Add(Mul(X, V), Add(Z, W)),
                 ))),
                 RULE_FORALL_ELIM,
                 premises=(17,),
-                term=Mul(X, Z),
+                term=Mul(X, V),
             ),
             ProofStep(
                 ForAll(W, Eq(
-                    Add(Add(Mul(X, Z), Z), W),
-                    Add(Mul(X, Z), Add(Z, W)),
+                    Add(Add(Mul(X, V), V), W),
+                    Add(Mul(X, V), Add(V, W)),
                 )),
                 RULE_FORALL_ELIM,
                 premises=(18,),
-                term=Z,
+                term=V,
             ),
             ProofStep(
                 Eq(
-                    Add(Add(Mul(X, Z), Z), X),
-                    Add(Mul(X, Z), Add(Z, X)),
+                    Add(Add(Mul(X, V), V), X),
+                    Add(Mul(X, V), Add(V, X)),
                 ),
                 RULE_FORALL_ELIM,
                 premises=(19,),
@@ -1979,186 +1977,177 @@ def build_initial_knowledge() -> KnowledgeState:
                 source="T7_ADD_COMMUTATIVE",
             ),
             ProofStep(
-                ForAll(Y, Eq(Add(Z, Y), Add(Y, Z))),
+                ForAll(Y, Eq(Add(V, Y), Add(Y, V))),
                 RULE_FORALL_ELIM,
                 premises=(21,),
-                term=Z,
+                term=V,
             ),
             ProofStep(
-                Eq(Add(Z, X), Add(X, Z)),
+                Eq(Add(V, X), Add(X, V)),
                 RULE_FORALL_ELIM,
                 premises=(22,),
                 term=X,
             ),
             ProofStep(
                 Eq(
-                    Add(Mul(X, Z), Add(Z, X)),
-                    Add(Mul(X, Z), Add(X, Z)),
+                    Add(Mul(X, V), Add(V, X)),
+                    Add(Mul(X, V), Add(X, V)),
                 ),
                 RULE_EQ_ADD_RIGHT_CONGRUENCE,
                 premises=(23,),
-                term=Mul(X, Z),
-            ),
-            ProofStep(
-                ForAll(Z, ForAll(W, Eq(
-                    Add(Add(Mul(X, Z), Z), W),
-                    Add(Mul(X, Z), Add(Z, W)),
-                ))),
-                RULE_FORALL_ELIM,
-                premises=(17,),
-                term=Mul(X, Z),
+                term=Mul(X, V),
             ),
             ProofStep(
                 ForAll(W, Eq(
-                    Add(Add(Mul(X, Z), X), W),
-                    Add(Mul(X, Z), Add(X, W)),
+                    Add(Add(Mul(X, V), X), W),
+                    Add(Mul(X, V), Add(X, W)),
                 )),
                 RULE_FORALL_ELIM,
-                premises=(25,),
+                premises=(18,),
                 term=X,
             ),
             ProofStep(
                 Eq(
-                    Add(Add(Mul(X, Z), X), Z),
-                    Add(Mul(X, Z), Add(X, Z)),
+                    Add(Add(Mul(X, V), X), V),
+                    Add(Mul(X, V), Add(X, V)),
                 ),
                 RULE_FORALL_ELIM,
-                premises=(26,),
-                term=Z,
+                premises=(25,),
+                term=V,
             ),
             ProofStep(
                 Eq(
-                    Add(Mul(X, Z), Add(X, Z)),
-                    Add(Add(Mul(X, Z), X), Z),
+                    Add(Mul(X, V), Add(X, V)),
+                    Add(Add(Mul(X, V), X), V),
                 ),
                 RULE_EQ_SYMMETRY,
-                premises=(27,),
+                premises=(26,),
             ),
             ProofStep(
                 Eq(
-                    Add(Add(Mul(X, Z), Z), X),
-                    Add(Mul(X, Z), Add(X, Z)),
+                    Add(Add(Mul(X, V), V), X),
+                    Add(Mul(X, V), Add(X, V)),
                 ),
                 RULE_EQ_TRANSITIVITY,
                 premises=(20, 24),
             ),
             ProofStep(
                 Eq(
-                    Add(Add(Mul(X, Z), Z), X),
-                    Add(Add(Mul(X, Z), X), Z),
+                    Add(Add(Mul(X, V), V), X),
+                    Add(Add(Mul(X, V), X), V),
                 ),
                 RULE_EQ_TRANSITIVITY,
-                premises=(29, 28),
+                premises=(28, 27),
             ),
             ProofStep(
                 Eq(
-                    Succ(Add(Add(Mul(X, Z), Z), X)),
-                    Succ(Add(Add(Mul(X, Z), X), Z)),
+                    Succ(Add(Add(Mul(X, V), V), X)),
+                    Succ(Add(Add(Mul(X, V), X), V)),
                 ),
                 RULE_EQ_SUCC_CONGRUENCE,
-                premises=(30,),
+                premises=(29,),
             ),
             ProofStep(
                 Eq(
-                    Add(Add(Mul(X, Z), Z), Succ(X)),
-                    Succ(Add(Add(Mul(X, Z), X), Z)),
+                    Add(Add(Mul(X, V), V), Succ(X)),
+                    Succ(Add(Add(Mul(X, V), X), V)),
                 ),
                 RULE_EQ_TRANSITIVITY,
-                premises=(16, 31),
+                premises=(16, 30),
             ),
             ProofStep(
                 ForAll(
-                    W,
+                    Y,
                     Eq(
-                        Add(Add(Mul(X, Z), X), Succ(W)),
-                        Succ(Add(Add(Mul(X, Z), X), W)),
+                        Add(Add(Mul(X, V), X), Succ(Y)),
+                        Succ(Add(Add(Mul(X, V), X), Y)),
                     ),
                 ),
                 RULE_FORALL_ELIM,
                 premises=(14,),
-                term=Add(Mul(X, Z), X),
+                term=Add(Mul(X, V), X),
             ),
             ProofStep(
                 Eq(
-                    Add(Add(Mul(X, Z), X), Succ(Z)),
-                    Succ(Add(Add(Mul(X, Z), X), Z)),
+                    Add(Add(Mul(X, V), X), Succ(V)),
+                    Succ(Add(Add(Mul(X, V), X), V)),
                 ),
                 RULE_FORALL_ELIM,
-                premises=(33,),
-                term=Z,
+                premises=(32,),
+                term=V,
             ),
             ProofStep(
                 Eq(
-                    Succ(Add(Add(Mul(X, Z), X), Z)),
-                    Add(Add(Mul(X, Z), X), Succ(Z)),
+                    Succ(Add(Add(Mul(X, V), X), V)),
+                    Add(Add(Mul(X, V), X), Succ(V)),
                 ),
                 RULE_EQ_SYMMETRY,
-                premises=(34,),
+                premises=(33,),
             ),
             ProofStep(
                 Eq(
-                    Add(Add(Mul(X, Z), Z), Succ(X)),
-                    Add(Add(Mul(X, Z), X), Succ(Z)),
+                    Add(Add(Mul(X, V), V), Succ(X)),
+                    Add(Add(Mul(X, V), X), Succ(V)),
                 ),
                 RULE_EQ_TRANSITIVITY,
-                premises=(32, 35),
+                premises=(31, 34),
             ),
             ProofStep(
                 ForAll(
-                    W,
-                    Eq(Mul(X, Succ(W)), Add(Mul(X, W), X)),
+                    Y,
+                    Eq(Mul(X, Succ(Y)), Add(Mul(X, Y), X)),
                 ),
                 RULE_FORALL_ELIM,
                 premises=(9,),
                 term=X,
             ),
             ProofStep(
-                Eq(Mul(X, Succ(Z)), Add(Mul(X, Z), X)),
+                Eq(Mul(X, Succ(V)), Add(Mul(X, V), X)),
                 RULE_FORALL_ELIM,
-                premises=(37,),
-                term=Z,
+                premises=(36,),
+                term=V,
             ),
             ProofStep(
                 Eq(
-                    Add(Mul(X, Succ(Z)), Succ(Z)),
-                    Add(Add(Mul(X, Z), X), Succ(Z)),
+                    Add(Mul(X, Succ(V)), Succ(V)),
+                    Add(Add(Mul(X, V), X), Succ(V)),
                 ),
                 RULE_EQ_ADD_LEFT_CONGRUENCE,
-                premises=(38,),
-                term=Succ(Z),
+                premises=(37,),
+                term=Succ(V),
             ),
             ProofStep(
                 Eq(
-                    Add(Add(Mul(X, Z), X), Succ(Z)),
-                    Add(Mul(X, Succ(Z)), Succ(Z)),
+                    Add(Add(Mul(X, V), X), Succ(V)),
+                    Add(Mul(X, Succ(V)), Succ(V)),
                 ),
                 RULE_EQ_SYMMETRY,
-                premises=(39,),
+                premises=(38,),
             ),
             ProofStep(
                 Eq(
-                    Mul(Succ(X), Succ(Z)),
-                    Add(Add(Mul(X, Z), X), Succ(Z)),
+                    Mul(Succ(X), Succ(V)),
+                    Add(Add(Mul(X, V), X), Succ(V)),
                 ),
                 RULE_EQ_TRANSITIVITY,
-                premises=(13, 36),
+                premises=(13, 35),
             ),
             ProofStep(
                 left_succ_step,
                 RULE_EQ_TRANSITIVITY,
-                premises=(41, 40),
+                premises=(40, 39),
             ),
             ProofStep(
-                ForAll(Z, left_succ_body),
+                ForAll(V, left_succ_body),
                 RULE_INDUCTION,
-                premises=(7, 42),
-                variable=Z,
+                premises=(7, 41),
+                variable=V,
                 discharge=8,
             ),
             ProofStep(
-                ForAll(X, ForAll(Z, left_succ_body)),
+                ForAll(X, ForAll(V, left_succ_body)),
                 RULE_FORALL_INTRO,
-                premises=(43,),
+                premises=(42,),
                 variable=X,
             ),
         ),
@@ -2166,12 +2155,12 @@ def build_initial_knowledge() -> KnowledgeState:
     state.add_theorem("T11_MUL_SUCC_LEFT", proof_t11)
 
     # T12: commutativity of multiplication.
-    mul_comm_body = Eq(Mul(X, Y), Mul(Y, X))
+    mul_comm_body = Eq(Mul(X, Z), Mul(Z, X))
     mul_comm_base = Eq(Mul(X, ZERO), Mul(ZERO, X))
-    mul_comm_step = Eq(Mul(X, Succ(Y)), Mul(Succ(Y), X))
+    mul_comm_step = Eq(Mul(X, Succ(Z)), Mul(Succ(Z), X))
 
     proof_t12 = Proof(
-        statement=ForAll(X, ForAll(Y, mul_comm_body)),
+        statement=ForAll(X, ForAll(Z, mul_comm_body)),
         steps=(
             ProofStep(AXIOM_MUL_ZERO.formula, RULE_AXIOM, source=AXIOM_MUL_ZERO.name),
             ProofStep(
@@ -2196,11 +2185,7 @@ def build_initial_knowledge() -> KnowledgeState:
                 RULE_EQ_SYMMETRY,
                 premises=(3,),
             ),
-            ProofStep(
-                mul_comm_base,
-                RULE_EQ_TRANSITIVITY,
-                premises=(1, 4),
-            ),
+            ProofStep(mul_comm_base, RULE_EQ_TRANSITIVITY, premises=(1, 4)),
             ProofStep(
                 mul_comm_body,
                 RULE_ASSUMPTION,
@@ -2213,23 +2198,23 @@ def build_initial_knowledge() -> KnowledgeState:
             ),
             ProofStep(
                 ForAll(
-                    Z,
-                    Eq(Mul(X, Succ(Z)), Add(Mul(X, Z), X)),
+                    Y,
+                    Eq(Mul(X, Succ(Y)), Add(Mul(X, Y), X)),
                 ),
                 RULE_FORALL_ELIM,
                 premises=(7,),
                 term=X,
             ),
             ProofStep(
-                Eq(Mul(X, Succ(Y)), Add(Mul(X, Y), X)),
+                Eq(Mul(X, Succ(Z)), Add(Mul(X, Z), X)),
                 RULE_FORALL_ELIM,
                 premises=(8,),
-                term=Y,
+                term=Z,
             ),
             ProofStep(
                 Eq(
-                    Add(Mul(X, Y), X),
-                    Add(Mul(Y, X), X),
+                    Add(Mul(X, Z), X),
+                    Add(Mul(Z, X), X),
                 ),
                 RULE_EQ_ADD_LEFT_CONGRUENCE,
                 premises=(6,),
@@ -2237,33 +2222,33 @@ def build_initial_knowledge() -> KnowledgeState:
             ),
             ProofStep(
                 Eq(
-                    Mul(X, Succ(Y)),
-                    Add(Mul(Y, X), X),
+                    Mul(X, Succ(Z)),
+                    Add(Mul(Z, X), X),
                 ),
                 RULE_EQ_TRANSITIVITY,
                 premises=(9, 10),
             ),
             ProofStep(
-                ForAll(X, ForAll(Z, Eq(
-                    Mul(Succ(X), Z),
-                    Add(Mul(X, Z), Z),
+                ForAll(X, ForAll(V, Eq(
+                    Mul(Succ(X), V),
+                    Add(Mul(X, V), V),
                 ))),
                 RULE_THEOREM,
                 source="T11_MUL_SUCC_LEFT",
             ),
             ProofStep(
-                ForAll(Z, Eq(
-                    Mul(Succ(Y), Z),
-                    Add(Mul(Y, Z), Z),
+                ForAll(V, Eq(
+                    Mul(Succ(Z), V),
+                    Add(Mul(Z, V), V),
                 )),
                 RULE_FORALL_ELIM,
                 premises=(12,),
-                term=Y,
+                term=Z,
             ),
             ProofStep(
                 Eq(
-                    Mul(Succ(Y), X),
-                    Add(Mul(Y, X), X),
+                    Mul(Succ(Z), X),
+                    Add(Mul(Z, X), X),
                 ),
                 RULE_FORALL_ELIM,
                 premises=(13,),
@@ -2271,8 +2256,8 @@ def build_initial_knowledge() -> KnowledgeState:
             ),
             ProofStep(
                 Eq(
-                    Add(Mul(Y, X), X),
-                    Mul(Succ(Y), X),
+                    Add(Mul(Z, X), X),
+                    Mul(Succ(Z), X),
                 ),
                 RULE_EQ_SYMMETRY,
                 premises=(14,),
@@ -2283,14 +2268,14 @@ def build_initial_knowledge() -> KnowledgeState:
                 premises=(11, 15),
             ),
             ProofStep(
-                ForAll(Y, mul_comm_body),
+                ForAll(Z, mul_comm_body),
                 RULE_INDUCTION,
                 premises=(5, 16),
-                variable=Y,
+                variable=Z,
                 discharge=6,
             ),
             ProofStep(
-                ForAll(X, ForAll(Y, mul_comm_body)),
+                ForAll(X, ForAll(Z, mul_comm_body)),
                 RULE_FORALL_INTRO,
                 premises=(17,),
                 variable=X,
@@ -2301,30 +2286,30 @@ def build_initial_knowledge() -> KnowledgeState:
 
     # T13: right distributivity of multiplication over addition.
     dist_body = Eq(
-        Mul(X, Add(Y, W)),
-        Add(Mul(X, Y), Mul(X, W)),
+        Mul(X, Add(U, V)),
+        Add(Mul(X, U), Mul(X, V)),
     )
     dist_base = Eq(
-        Mul(X, Add(Y, ZERO)),
-        Add(Mul(X, Y), Mul(X, ZERO)),
+        Mul(X, Add(U, ZERO)),
+        Add(Mul(X, U), Mul(X, ZERO)),
     )
     dist_step = Eq(
-        Mul(X, Add(Y, Succ(W))),
-        Add(Mul(X, Y), Mul(X, Succ(W))),
+        Mul(X, Add(U, Succ(V))),
+        Add(Mul(X, U), Mul(X, Succ(V))),
     )
 
     proof_t13 = Proof(
-        statement=ForAll(X, ForAll(Y, ForAll(W, dist_body))),
+        statement=ForAll(X, ForAll(U, ForAll(V, dist_body))),
         steps=(
             ProofStep(AXIOM_ADD_ZERO.formula, RULE_AXIOM, source=AXIOM_ADD_ZERO.name),
             ProofStep(
-                Eq(Add(Y, ZERO), Y),
+                Eq(Add(U, ZERO), U),
                 RULE_FORALL_ELIM,
                 premises=(0,),
-                term=Y,
+                term=U,
             ),
             ProofStep(
-                Eq(Mul(X, Add(Y, ZERO)), Mul(X, Y)),
+                Eq(Mul(X, Add(U, ZERO)), Mul(X, U)),
                 RULE_EQ_MUL_RIGHT_CONGRUENCE,
                 premises=(1,),
                 term=X,
@@ -2338,40 +2323,36 @@ def build_initial_knowledge() -> KnowledgeState:
             ),
             ProofStep(
                 Eq(
-                    Add(Mul(X, Y), Mul(X, ZERO)),
-                    Add(Mul(X, Y), ZERO),
+                    Add(Mul(X, U), Mul(X, ZERO)),
+                    Add(Mul(X, U), ZERO),
                 ),
                 RULE_EQ_ADD_RIGHT_CONGRUENCE,
                 premises=(4,),
-                term=Mul(X, Y),
+                term=Mul(X, U),
             ),
             ProofStep(
-                Eq(Add(Mul(X, Y), ZERO), Mul(X, Y)),
+                Eq(Add(Mul(X, U), ZERO), Mul(X, U)),
                 RULE_FORALL_ELIM,
                 premises=(0,),
-                term=Mul(X, Y),
+                term=Mul(X, U),
             ),
             ProofStep(
                 Eq(
-                    Add(Mul(X, Y), Mul(X, ZERO)),
-                    Mul(X, Y),
+                    Add(Mul(X, U), Mul(X, ZERO)),
+                    Mul(X, U),
                 ),
                 RULE_EQ_TRANSITIVITY,
                 premises=(5, 6),
             ),
             ProofStep(
                 Eq(
-                    Mul(X, Y),
-                    Add(Mul(X, Y), Mul(X, ZERO)),
+                    Mul(X, U),
+                    Add(Mul(X, U), Mul(X, ZERO)),
                 ),
                 RULE_EQ_SYMMETRY,
                 premises=(7,),
             ),
-            ProofStep(
-                dist_base,
-                RULE_EQ_TRANSITIVITY,
-                premises=(2, 8),
-            ),
+            ProofStep(dist_base, RULE_EQ_TRANSITIVITY, premises=(2, 8)),
             ProofStep(
                 dist_body,
                 RULE_ASSUMPTION,
@@ -2384,23 +2365,23 @@ def build_initial_knowledge() -> KnowledgeState:
             ),
             ProofStep(
                 ForAll(
-                    W,
-                    Eq(Add(Y, Succ(W)), Succ(Add(Y, W))),
+                    Y,
+                    Eq(Add(U, Succ(Y)), Succ(Add(U, Y))),
                 ),
                 RULE_FORALL_ELIM,
                 premises=(11,),
-                term=Y,
+                term=U,
             ),
             ProofStep(
-                Eq(Add(Y, Succ(W)), Succ(Add(Y, W))),
+                Eq(Add(U, Succ(V)), Succ(Add(U, V))),
                 RULE_FORALL_ELIM,
                 premises=(12,),
-                term=W,
+                term=V,
             ),
             ProofStep(
                 Eq(
-                    Mul(X, Add(Y, Succ(W))),
-                    Mul(X, Succ(Add(Y, W))),
+                    Mul(X, Add(U, Succ(V))),
+                    Mul(X, Succ(Add(U, V))),
                 ),
                 RULE_EQ_MUL_RIGHT_CONGRUENCE,
                 premises=(13,),
@@ -2413,8 +2394,8 @@ def build_initial_knowledge() -> KnowledgeState:
             ),
             ProofStep(
                 ForAll(
-                    W,
-                    Eq(Mul(X, Succ(W)), Add(Mul(X, W), X)),
+                    Y,
+                    Eq(Mul(X, Succ(Y)), Add(Mul(X, Y), X)),
                 ),
                 RULE_FORALL_ELIM,
                 premises=(15,),
@@ -2422,25 +2403,25 @@ def build_initial_knowledge() -> KnowledgeState:
             ),
             ProofStep(
                 Eq(
-                    Mul(X, Succ(Add(Y, W))),
-                    Add(Mul(X, Add(Y, W)), X),
+                    Mul(X, Succ(Add(U, V))),
+                    Add(Mul(X, Add(U, V)), X),
                 ),
                 RULE_FORALL_ELIM,
                 premises=(16,),
-                term=Add(Y, W),
+                term=Add(U, V),
             ),
             ProofStep(
                 Eq(
-                    Mul(X, Add(Y, Succ(W))),
-                    Add(Mul(X, Add(Y, W)), X),
+                    Mul(X, Add(U, Succ(V))),
+                    Add(Mul(X, Add(U, V)), X),
                 ),
                 RULE_EQ_TRANSITIVITY,
                 premises=(14, 17),
             ),
             ProofStep(
                 Eq(
-                    Add(Mul(X, Add(Y, W)), X),
-                    Add(Add(Mul(X, Y), Mul(X, W)), X),
+                    Add(Mul(X, Add(U, V)), X),
+                    Add(Add(Mul(X, U), Mul(X, V)), X),
                 ),
                 RULE_EQ_ADD_LEFT_CONGRUENCE,
                 premises=(10,),
@@ -2448,8 +2429,8 @@ def build_initial_knowledge() -> KnowledgeState:
             ),
             ProofStep(
                 Eq(
-                    Mul(X, Add(Y, Succ(W))),
-                    Add(Add(Mul(X, Y), Mul(X, W)), X),
+                    Mul(X, Add(U, Succ(V))),
+                    Add(Add(Mul(X, U), Mul(X, V)), X),
                 ),
                 RULE_EQ_TRANSITIVITY,
                 premises=(18, 19),
@@ -2464,26 +2445,26 @@ def build_initial_knowledge() -> KnowledgeState:
             ),
             ProofStep(
                 ForAll(Z, ForAll(W, Eq(
-                    Add(Add(Mul(X, Y), Z), W),
-                    Add(Mul(X, Y), Add(Z, W)),
+                    Add(Add(Mul(X, U), Z), W),
+                    Add(Mul(X, U), Add(Z, W)),
                 ))),
                 RULE_FORALL_ELIM,
                 premises=(21,),
-                term=Mul(X, Y),
+                term=Mul(X, U),
             ),
             ProofStep(
                 ForAll(W, Eq(
-                    Add(Add(Mul(X, Y), Mul(X, W)), W),
-                    Add(Mul(X, Y), Add(Mul(X, W), W)),
+                    Add(Add(Mul(X, U), Mul(X, V)), W),
+                    Add(Mul(X, U), Add(Mul(X, V), W)),
                 )),
                 RULE_FORALL_ELIM,
                 premises=(22,),
-                term=Mul(X, W),
+                term=Mul(X, V),
             ),
             ProofStep(
                 Eq(
-                    Add(Add(Mul(X, Y), Mul(X, W)), X),
-                    Add(Mul(X, Y), Add(Mul(X, W), X)),
+                    Add(Add(Mul(X, U), Mul(X, V)), X),
+                    Add(Mul(X, U), Add(Mul(X, V), X)),
                 ),
                 RULE_FORALL_ELIM,
                 premises=(23,),
@@ -2491,55 +2472,51 @@ def build_initial_knowledge() -> KnowledgeState:
             ),
             ProofStep(
                 Eq(
-                    Mul(X, Add(Y, Succ(W))),
-                    Add(Mul(X, Y), Add(Mul(X, W), X)),
+                    Mul(X, Add(U, Succ(V))),
+                    Add(Mul(X, U), Add(Mul(X, V), X)),
                 ),
                 RULE_EQ_TRANSITIVITY,
                 premises=(20, 24),
             ),
             ProofStep(
-                Eq(Mul(X, Succ(W)), Add(Mul(X, W), X)),
+                Eq(Mul(X, Succ(V)), Add(Mul(X, V), X)),
                 RULE_FORALL_ELIM,
                 premises=(16,),
-                term=W,
+                term=V,
             ),
             ProofStep(
                 Eq(
-                    Add(Mul(X, Y), Mul(X, Succ(W))),
-                    Add(Mul(X, Y), Add(Mul(X, W), X)),
+                    Add(Mul(X, U), Mul(X, Succ(V))),
+                    Add(Mul(X, U), Add(Mul(X, V), X)),
                 ),
                 RULE_EQ_ADD_RIGHT_CONGRUENCE,
                 premises=(26,),
-                term=Mul(X, Y),
+                term=Mul(X, U),
             ),
             ProofStep(
                 Eq(
-                    Add(Mul(X, Y), Add(Mul(X, W), X)),
-                    Add(Mul(X, Y), Mul(X, Succ(W))),
+                    Add(Mul(X, U), Add(Mul(X, V), X)),
+                    Add(Mul(X, U), Mul(X, Succ(V))),
                 ),
                 RULE_EQ_SYMMETRY,
                 premises=(27,),
             ),
+            ProofStep(dist_step, RULE_EQ_TRANSITIVITY, premises=(25, 28)),
             ProofStep(
-                dist_step,
-                RULE_EQ_TRANSITIVITY,
-                premises=(25, 28),
-            ),
-            ProofStep(
-                ForAll(W, dist_body),
+                ForAll(V, dist_body),
                 RULE_INDUCTION,
                 premises=(9, 29),
-                variable=W,
+                variable=V,
                 discharge=10,
             ),
             ProofStep(
-                ForAll(Y, ForAll(W, dist_body)),
+                ForAll(U, ForAll(V, dist_body)),
                 RULE_FORALL_INTRO,
                 premises=(30,),
-                variable=Y,
+                variable=U,
             ),
             ProofStep(
-                ForAll(X, ForAll(Y, ForAll(W, dist_body))),
+                ForAll(X, ForAll(U, ForAll(V, dist_body))),
                 RULE_FORALL_INTRO,
                 premises=(31,),
                 variable=X,
@@ -2550,37 +2527,37 @@ def build_initial_knowledge() -> KnowledgeState:
 
     # T14: associativity of multiplication.
     mul_assoc_body = Eq(
-        Mul(Mul(X, Y), Z),
-        Mul(X, Mul(Y, Z)),
+        Mul(Mul(X, U), W),
+        Mul(X, Mul(U, W)),
     )
     mul_assoc_base = Eq(
-        Mul(Mul(X, Y), ZERO),
-        Mul(X, Mul(Y, ZERO)),
+        Mul(Mul(X, U), ZERO),
+        Mul(X, Mul(U, ZERO)),
     )
     mul_assoc_step = Eq(
-        Mul(Mul(X, Y), Succ(Z)),
-        Mul(X, Mul(Y, Succ(Z))),
+        Mul(Mul(X, U), Succ(W)),
+        Mul(X, Mul(U, Succ(W))),
     )
 
     proof_t14 = Proof(
-        statement=ForAll(X, ForAll(Y, ForAll(Z, mul_assoc_body))),
+        statement=ForAll(X, ForAll(U, ForAll(W, mul_assoc_body))),
         steps=(
             ProofStep(AXIOM_MUL_ZERO.formula, RULE_AXIOM, source=AXIOM_MUL_ZERO.name),
             ProofStep(
-                Eq(Mul(Mul(X, Y), ZERO), ZERO),
+                Eq(Mul(Mul(X, U), ZERO), ZERO),
                 RULE_FORALL_ELIM,
                 premises=(0,),
-                term=Mul(X, Y),
+                term=Mul(X, U),
             ),
             ProofStep(
-                Eq(Mul(Y, ZERO), ZERO),
+                Eq(Mul(U, ZERO), ZERO),
                 RULE_FORALL_ELIM,
                 premises=(0,),
-                term=Y,
+                term=U,
             ),
             ProofStep(
                 Eq(
-                    Mul(X, Mul(Y, ZERO)),
+                    Mul(X, Mul(U, ZERO)),
                     Mul(X, ZERO),
                 ),
                 RULE_EQ_MUL_RIGHT_CONGRUENCE,
@@ -2594,20 +2571,16 @@ def build_initial_knowledge() -> KnowledgeState:
                 term=X,
             ),
             ProofStep(
-                Eq(Mul(X, Mul(Y, ZERO)), ZERO),
+                Eq(Mul(X, Mul(U, ZERO)), ZERO),
                 RULE_EQ_TRANSITIVITY,
                 premises=(3, 4),
             ),
             ProofStep(
-                Eq(ZERO, Mul(X, Mul(Y, ZERO))),
+                Eq(ZERO, Mul(X, Mul(U, ZERO))),
                 RULE_EQ_SYMMETRY,
                 premises=(5,),
             ),
-            ProofStep(
-                mul_assoc_base,
-                RULE_EQ_TRANSITIVITY,
-                premises=(1, 6),
-            ),
+            ProofStep(mul_assoc_base, RULE_EQ_TRANSITIVITY, premises=(1, 6)),
             ProofStep(
                 mul_assoc_body,
                 RULE_ASSUMPTION,
@@ -2620,137 +2593,133 @@ def build_initial_knowledge() -> KnowledgeState:
             ),
             ProofStep(
                 ForAll(
-                    W,
+                    Y,
                     Eq(
-                        Mul(Mul(X, Y), Succ(W)),
-                        Add(Mul(Mul(X, Y), W), Mul(X, Y)),
+                        Mul(Mul(X, U), Succ(Y)),
+                        Add(Mul(Mul(X, U), Y), Mul(X, U)),
                     ),
                 ),
                 RULE_FORALL_ELIM,
                 premises=(9,),
-                term=Mul(X, Y),
+                term=Mul(X, U),
             ),
             ProofStep(
                 Eq(
-                    Mul(Mul(X, Y), Succ(Z)),
-                    Add(Mul(Mul(X, Y), Z), Mul(X, Y)),
+                    Mul(Mul(X, U), Succ(W)),
+                    Add(Mul(Mul(X, U), W), Mul(X, U)),
                 ),
                 RULE_FORALL_ELIM,
                 premises=(10,),
-                term=Z,
+                term=W,
             ),
             ProofStep(
                 Eq(
-                    Add(Mul(Mul(X, Y), Z), Mul(X, Y)),
-                    Add(Mul(X, Mul(Y, Z)), Mul(X, Y)),
+                    Add(Mul(Mul(X, U), W), Mul(X, U)),
+                    Add(Mul(X, Mul(U, W)), Mul(X, U)),
                 ),
                 RULE_EQ_ADD_LEFT_CONGRUENCE,
                 premises=(8,),
-                term=Mul(X, Y),
+                term=Mul(X, U),
             ),
             ProofStep(
                 Eq(
-                    Mul(Mul(X, Y), Succ(Z)),
-                    Add(Mul(X, Mul(Y, Z)), Mul(X, Y)),
+                    Mul(Mul(X, U), Succ(W)),
+                    Add(Mul(X, Mul(U, W)), Mul(X, U)),
                 ),
                 RULE_EQ_TRANSITIVITY,
                 premises=(11, 12),
             ),
             ProofStep(
                 ForAll(
-                    W,
-                    Eq(Mul(Y, Succ(W)), Add(Mul(Y, W), Y)),
+                    Y,
+                    Eq(Mul(U, Succ(Y)), Add(Mul(U, Y), U)),
                 ),
                 RULE_FORALL_ELIM,
                 premises=(9,),
-                term=Y,
+                term=U,
             ),
             ProofStep(
-                Eq(Mul(Y, Succ(Z)), Add(Mul(Y, Z), Y)),
+                Eq(Mul(U, Succ(W)), Add(Mul(U, W), U)),
                 RULE_FORALL_ELIM,
                 premises=(14,),
-                term=Z,
+                term=W,
             ),
             ProofStep(
                 Eq(
-                    Mul(X, Mul(Y, Succ(Z))),
-                    Mul(X, Add(Mul(Y, Z), Y)),
+                    Mul(X, Mul(U, Succ(W))),
+                    Mul(X, Add(Mul(U, W), U)),
                 ),
                 RULE_EQ_MUL_RIGHT_CONGRUENCE,
                 premises=(15,),
                 term=X,
             ),
             ProofStep(
-                ForAll(X, ForAll(Y, ForAll(W, Eq(
-                    Mul(X, Add(Y, W)),
-                    Add(Mul(X, Y), Mul(X, W)),
+                ForAll(X, ForAll(U, ForAll(V, Eq(
+                    Mul(X, Add(U, V)),
+                    Add(Mul(X, U), Mul(X, V)),
                 )))),
                 RULE_THEOREM,
                 source="T13_MUL_DISTRIBUTIVE",
             ),
             ProofStep(
-                ForAll(Y, ForAll(W, Eq(
-                    Mul(X, Add(Y, W)),
-                    Add(Mul(X, Y), Mul(X, W)),
+                ForAll(U, ForAll(V, Eq(
+                    Mul(X, Add(U, V)),
+                    Add(Mul(X, U), Mul(X, V)),
                 ))),
                 RULE_FORALL_ELIM,
                 premises=(17,),
                 term=X,
             ),
             ProofStep(
-                ForAll(W, Eq(
-                    Mul(X, Add(Mul(Y, Z), W)),
-                    Add(Mul(X, Mul(Y, Z)), Mul(X, W)),
+                ForAll(V, Eq(
+                    Mul(X, Add(Mul(U, W), V)),
+                    Add(Mul(X, Mul(U, W)), Mul(X, V)),
                 )),
                 RULE_FORALL_ELIM,
                 premises=(18,),
-                term=Mul(Y, Z),
+                term=Mul(U, W),
             ),
             ProofStep(
                 Eq(
-                    Mul(X, Add(Mul(Y, Z), Y)),
-                    Add(Mul(X, Mul(Y, Z)), Mul(X, Y)),
+                    Mul(X, Add(Mul(U, W), U)),
+                    Add(Mul(X, Mul(U, W)), Mul(X, U)),
                 ),
                 RULE_FORALL_ELIM,
                 premises=(19,),
-                term=Y,
+                term=U,
             ),
             ProofStep(
                 Eq(
-                    Mul(X, Mul(Y, Succ(Z))),
-                    Add(Mul(X, Mul(Y, Z)), Mul(X, Y)),
+                    Mul(X, Mul(U, Succ(W))),
+                    Add(Mul(X, Mul(U, W)), Mul(X, U)),
                 ),
                 RULE_EQ_TRANSITIVITY,
                 premises=(16, 20),
             ),
             ProofStep(
                 Eq(
-                    Add(Mul(X, Mul(Y, Z)), Mul(X, Y)),
-                    Mul(X, Mul(Y, Succ(Z))),
+                    Add(Mul(X, Mul(U, W)), Mul(X, U)),
+                    Mul(X, Mul(U, Succ(W))),
                 ),
                 RULE_EQ_SYMMETRY,
                 premises=(21,),
             ),
+            ProofStep(mul_assoc_step, RULE_EQ_TRANSITIVITY, premises=(13, 22)),
             ProofStep(
-                mul_assoc_step,
-                RULE_EQ_TRANSITIVITY,
-                premises=(13, 22),
-            ),
-            ProofStep(
-                ForAll(Z, mul_assoc_body),
+                ForAll(W, mul_assoc_body),
                 RULE_INDUCTION,
                 premises=(7, 23),
-                variable=Z,
+                variable=W,
                 discharge=8,
             ),
             ProofStep(
-                ForAll(Y, ForAll(Z, mul_assoc_body)),
+                ForAll(U, ForAll(W, mul_assoc_body)),
                 RULE_FORALL_INTRO,
                 premises=(24,),
-                variable=Y,
+                variable=U,
             ),
             ProofStep(
-                ForAll(X, ForAll(Y, ForAll(Z, mul_assoc_body))),
+                ForAll(X, ForAll(U, ForAll(W, mul_assoc_body))),
                 RULE_FORALL_INTRO,
                 premises=(25,),
                 variable=X,
