@@ -44,3 +44,9 @@ dist/
 *.tmp
 *.log
 tempCodeRunnerFile.py
+
+# Lean / Lake build artifacts
+.lake/
+
+# Gareen generated Lean candidates and research reports
+.gareen/
