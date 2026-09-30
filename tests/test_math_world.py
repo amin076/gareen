@@ -15,14 +15,17 @@ from math_world import (
     RULE_ASSUMPTION,
     RULE_AXIOM,
     RULE_FORALL_ELIM,
+    RULE_INDUCTION,
     THREE,
     TWO,
     Add,
     Eq,
+    ForAll,
     Not,
     Proof,
     ProofStep,
     Succ,
+    X,
     ZERO,
     build_initial_knowledge,
     check_proof,
@@ -61,6 +64,9 @@ class FormalWorldTests(unittest.TestCase):
         self.assertIn("FORALL_ELIM", names)
         self.assertIn("MODUS_PONENS", names)
         self.assertIn("NEGATION_INTRO", names)
+        self.assertIn("EQ_SUCC_CONGRUENCE", names)
+        self.assertIn("EQ_TRANSITIVITY", names)
+        self.assertIn("INDUCTION", names)
 
 
 class ProofEngineTests(unittest.TestCase):
@@ -128,6 +134,7 @@ class ProofEngineTests(unittest.TestCase):
                 "T2_ONE_NE_TWO",
                 "T3_TWO_NE_THREE",
                 "T4_TWO_PLUS_ZERO",
+                "T5_ZERO_PLUS_X",
             ],
         )
         self.assertEqual(
@@ -146,6 +153,52 @@ class ProofEngineTests(unittest.TestCase):
             state.theorems["T4_TWO_PLUS_ZERO"].statement,
             Eq(Add(TWO, ZERO), TWO),
         )
+        self.assertEqual(
+            state.theorems["T5_ZERO_PLUS_X"].statement,
+            ForAll(X, Eq(Add(ZERO, X), X)),
+        )
+
+    def test_induction_theorem_depends_on_addition_axioms(self):
+        state = build_initial_knowledge()
+        dependencies = state.theorems["T5_ZERO_PLUS_X"].dependencies
+
+        self.assertIn(AXIOM_ADD_ZERO.name, dependencies)
+        self.assertIn(AXIOM_ADD_SUCCESSOR.name, dependencies)
+
+    def test_invalid_induction_base_is_rejected(self):
+        predicate = Eq(Add(ZERO, X), X)
+        bad_base = Eq(Add(ZERO, ZERO), ONE)
+        step_case = Eq(Add(ZERO, Succ(X)), Succ(X))
+
+        proof = Proof(
+            statement=ForAll(X, predicate),
+            steps=(
+                ProofStep(
+                    conclusion=bad_base,
+                    rule=RULE_ASSUMPTION,
+                ),
+                ProofStep(
+                    conclusion=predicate,
+                    rule=RULE_ASSUMPTION,
+                ),
+                ProofStep(
+                    conclusion=step_case,
+                    rule=RULE_ASSUMPTION,
+                    premises=(),
+                ),
+                ProofStep(
+                    conclusion=ForAll(X, predicate),
+                    rule=RULE_INDUCTION,
+                    premises=(0, 2),
+                    variable=X,
+                    discharge=1,
+                ),
+            ),
+        )
+
+        result = check_proof(proof)
+        self.assertFalse(result.valid)
+        self.assertIn("base case", " ".join(result.errors))
 
     def test_later_theorem_depends_on_earlier_theorem(self):
         state = build_initial_knowledge()
