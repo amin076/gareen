@@ -170,8 +170,8 @@ def generate_candidate_statements(
         sorted(
             candidates.values(),
             key=lambda item: (
-                -item.heuristic_score,
                 _expr_size(item.source_term),
+                -item.heuristic_score,
                 str(item.statement),
             ),
         )
