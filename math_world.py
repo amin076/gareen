@@ -1,4 +1,4 @@
-"""Gareen Phase 4: a tiny formal arithmetic world with induction.
+"""Gareen Phase 5: induction, generalization, and addition commutativity.
 
 The host Python runtime is meta-level infrastructure. Mathematical knowledge is
 accepted into Gareen only when it is represented in the object-world and passes
@@ -49,6 +49,7 @@ class Add(Expr):
 ZERO = Zero()
 X = Var("x")
 Y = Var("y")
+Z = Var("z")
 
 
 class Formula:
@@ -201,6 +202,7 @@ RULE_AXIOM = "AXIOM"
 RULE_THEOREM = "THEOREM"
 RULE_ASSUMPTION = "ASSUMPTION"
 RULE_FORALL_ELIM = "FORALL_ELIM"
+RULE_FORALL_INTRO = "FORALL_INTRO"
 RULE_MODUS_PONENS = "MODUS_PONENS"
 RULE_EQ_SYMMETRY = "EQ_SYMMETRY"
 RULE_CONTRADICTION = "CONTRADICTION"
@@ -214,6 +216,10 @@ INFERENCE_RULES = (
     InferenceRule(RULE_THEOREM, "Reuse an already verified theorem."),
     InferenceRule(RULE_ASSUMPTION, "Open a temporary assumption for a subproof."),
     InferenceRule(RULE_FORALL_ELIM, "Instantiate ∀x.P(x) at a chosen term."),
+    InferenceRule(
+        RULE_FORALL_INTRO,
+        "From P(x), derive ∀x.P(x) when x is not free in any open assumption.",
+    ),
     InferenceRule(RULE_MODUS_PONENS, "From P→Q and P, derive Q."),
     InferenceRule(RULE_EQ_SYMMETRY, "From a=b, derive b=a."),
     InferenceRule(RULE_CONTRADICTION, "From P and ¬P, derive ⊥."),
@@ -319,6 +325,32 @@ def substitute_expr(expr: Expr, variable: Var, replacement: Expr) -> Expr:
             substitute_expr(expr.right, variable, replacement),
         )
     raise TypeError(f"Unsupported expression type: {type(expr)!r}")
+
+
+def free_vars_expr(expr: Expr) -> frozenset[Var]:
+    if isinstance(expr, Var):
+        return frozenset({expr})
+    if isinstance(expr, Zero):
+        return frozenset()
+    if isinstance(expr, Succ):
+        return free_vars_expr(expr.value)
+    if isinstance(expr, Add):
+        return free_vars_expr(expr.left) | free_vars_expr(expr.right)
+    raise TypeError(f"Unsupported expression type: {type(expr)!r}")
+
+
+def free_vars_formula(formula: Formula) -> frozenset[Var]:
+    if isinstance(formula, Eq):
+        return free_vars_expr(formula.left) | free_vars_expr(formula.right)
+    if isinstance(formula, Not):
+        return free_vars_formula(formula.formula)
+    if isinstance(formula, Implies):
+        return free_vars_formula(formula.premise) | free_vars_formula(formula.conclusion)
+    if isinstance(formula, ForAll):
+        return free_vars_formula(formula.body) - frozenset({formula.variable})
+    if isinstance(formula, Bottom):
+        return frozenset()
+    raise TypeError(f"Unsupported formula type: {type(formula)!r}")
 
 
 def substitute_formula(
@@ -458,6 +490,35 @@ def check_proof(
                 )
                 if expected != step.conclusion:
                     errors.append(f"{prefix}: invalid universal instantiation")
+
+            dependencies.append(inherited)
+            continue
+
+        if step.rule == RULE_FORALL_INTRO:
+            if len(premise_steps) != 1:
+                errors.append(f"{prefix}: FORALL_INTRO needs one premise")
+                dependencies.append(inherited)
+                continue
+
+            if not isinstance(step.conclusion, ForAll):
+                errors.append(f"{prefix}: FORALL_INTRO must conclude a universal formula")
+                dependencies.append(inherited)
+                continue
+
+            variable = step.variable or step.conclusion.variable
+            if variable != step.conclusion.variable:
+                errors.append(f"{prefix}: generalized variable does not match conclusion")
+
+            if step.conclusion.body != premise_steps[0].conclusion:
+                errors.append(f"{prefix}: universal body does not match premise")
+
+            for assumption_index in inherited:
+                assumption_formula = proof.steps[assumption_index].conclusion
+                if variable in free_vars_formula(assumption_formula):
+                    errors.append(
+                        f"{prefix}: generalized variable is free in open assumption "
+                        f"{assumption_index}"
+                    )
 
             dependencies.append(inherited)
             continue
@@ -903,6 +964,289 @@ def build_initial_knowledge() -> KnowledgeState:
     )
     state.add_theorem("T5_ZERO_PLUS_X", proof_t5)
 
+    # T6: ∀x∀z. S(x) + z = S(x + z)
+    succ_add_body = Eq(Add(Succ(X), Z), Succ(Add(X, Z)))
+    succ_add_base = Eq(Add(Succ(X), ZERO), Succ(Add(X, ZERO)))
+    succ_add_step = Eq(
+        Add(Succ(X), Succ(Z)),
+        Succ(Add(X, Succ(Z))),
+    )
+
+    proof_t6 = Proof(
+        statement=ForAll(X, ForAll(Z, succ_add_body)),
+        steps=(
+            ProofStep(
+                conclusion=AXIOM_ADD_ZERO.formula,
+                rule=RULE_AXIOM,
+                source=AXIOM_ADD_ZERO.name,
+            ),
+            ProofStep(
+                conclusion=Eq(Add(Succ(X), ZERO), Succ(X)),
+                rule=RULE_FORALL_ELIM,
+                premises=(0,),
+                term=Succ(X),
+            ),
+            ProofStep(
+                conclusion=Eq(Add(X, ZERO), X),
+                rule=RULE_FORALL_ELIM,
+                premises=(0,),
+                term=X,
+            ),
+            ProofStep(
+                conclusion=Eq(Succ(Add(X, ZERO)), Succ(X)),
+                rule=RULE_EQ_SUCC_CONGRUENCE,
+                premises=(2,),
+            ),
+            ProofStep(
+                conclusion=Eq(Succ(X), Succ(Add(X, ZERO))),
+                rule=RULE_EQ_SYMMETRY,
+                premises=(3,),
+            ),
+            ProofStep(
+                conclusion=succ_add_base,
+                rule=RULE_EQ_TRANSITIVITY,
+                premises=(1, 4),
+            ),
+            ProofStep(
+                conclusion=succ_add_body,
+                rule=RULE_ASSUMPTION,
+                note="Induction hypothesis: S(x) + z = S(x + z).",
+            ),
+            ProofStep(
+                conclusion=AXIOM_ADD_SUCCESSOR.formula,
+                rule=RULE_AXIOM,
+                source=AXIOM_ADD_SUCCESSOR.name,
+            ),
+            ProofStep(
+                conclusion=ForAll(
+                    Y,
+                    Eq(
+                        Add(Succ(X), Succ(Y)),
+                        Succ(Add(Succ(X), Y)),
+                    ),
+                ),
+                rule=RULE_FORALL_ELIM,
+                premises=(7,),
+                term=Succ(X),
+            ),
+            ProofStep(
+                conclusion=Eq(
+                    Add(Succ(X), Succ(Z)),
+                    Succ(Add(Succ(X), Z)),
+                ),
+                rule=RULE_FORALL_ELIM,
+                premises=(8,),
+                term=Z,
+            ),
+            ProofStep(
+                conclusion=Eq(
+                    Succ(Add(Succ(X), Z)),
+                    Succ(Succ(Add(X, Z))),
+                ),
+                rule=RULE_EQ_SUCC_CONGRUENCE,
+                premises=(6,),
+            ),
+            ProofStep(
+                conclusion=ForAll(
+                    Y,
+                    Eq(Add(X, Succ(Y)), Succ(Add(X, Y))),
+                ),
+                rule=RULE_FORALL_ELIM,
+                premises=(7,),
+                term=X,
+            ),
+            ProofStep(
+                conclusion=Eq(
+                    Add(X, Succ(Z)),
+                    Succ(Add(X, Z)),
+                ),
+                rule=RULE_FORALL_ELIM,
+                premises=(11,),
+                term=Z,
+            ),
+            ProofStep(
+                conclusion=Eq(
+                    Succ(Add(X, Succ(Z))),
+                    Succ(Succ(Add(X, Z))),
+                ),
+                rule=RULE_EQ_SUCC_CONGRUENCE,
+                premises=(12,),
+            ),
+            ProofStep(
+                conclusion=Eq(
+                    Succ(Succ(Add(X, Z))),
+                    Succ(Add(X, Succ(Z))),
+                ),
+                rule=RULE_EQ_SYMMETRY,
+                premises=(13,),
+            ),
+            ProofStep(
+                conclusion=Eq(
+                    Add(Succ(X), Succ(Z)),
+                    Succ(Succ(Add(X, Z))),
+                ),
+                rule=RULE_EQ_TRANSITIVITY,
+                premises=(9, 10),
+            ),
+            ProofStep(
+                conclusion=succ_add_step,
+                rule=RULE_EQ_TRANSITIVITY,
+                premises=(15, 14),
+            ),
+            ProofStep(
+                conclusion=ForAll(Z, succ_add_body),
+                rule=RULE_INDUCTION,
+                premises=(5, 16),
+                variable=Z,
+                discharge=6,
+            ),
+            ProofStep(
+                conclusion=ForAll(X, ForAll(Z, succ_add_body)),
+                rule=RULE_FORALL_INTRO,
+                premises=(17,),
+                variable=X,
+            ),
+        ),
+    )
+    state.add_theorem("T6_SUCC_ADD", proof_t6)
+
+    # T7: ∀x∀y. x + y = y + x
+    comm_body = Eq(Add(X, Y), Add(Y, X))
+    comm_base = Eq(Add(X, ZERO), Add(ZERO, X))
+    comm_step = Eq(Add(X, Succ(Y)), Add(Succ(Y), X))
+
+    proof_t7 = Proof(
+        statement=ForAll(X, ForAll(Y, comm_body)),
+        steps=(
+            ProofStep(
+                conclusion=AXIOM_ADD_ZERO.formula,
+                rule=RULE_AXIOM,
+                source=AXIOM_ADD_ZERO.name,
+            ),
+            ProofStep(
+                conclusion=Eq(Add(X, ZERO), X),
+                rule=RULE_FORALL_ELIM,
+                premises=(0,),
+                term=X,
+            ),
+            ProofStep(
+                conclusion=ForAll(X, Eq(Add(ZERO, X), X)),
+                rule=RULE_THEOREM,
+                source="T5_ZERO_PLUS_X",
+            ),
+            ProofStep(
+                conclusion=Eq(Add(ZERO, X), X),
+                rule=RULE_FORALL_ELIM,
+                premises=(2,),
+                term=X,
+            ),
+            ProofStep(
+                conclusion=Eq(X, Add(ZERO, X)),
+                rule=RULE_EQ_SYMMETRY,
+                premises=(3,),
+            ),
+            ProofStep(
+                conclusion=comm_base,
+                rule=RULE_EQ_TRANSITIVITY,
+                premises=(1, 4),
+            ),
+            ProofStep(
+                conclusion=comm_body,
+                rule=RULE_ASSUMPTION,
+                note="Induction hypothesis: x + y = y + x.",
+            ),
+            ProofStep(
+                conclusion=AXIOM_ADD_SUCCESSOR.formula,
+                rule=RULE_AXIOM,
+                source=AXIOM_ADD_SUCCESSOR.name,
+            ),
+            ProofStep(
+                conclusion=ForAll(
+                    Y,
+                    Eq(Add(X, Succ(Y)), Succ(Add(X, Y))),
+                ),
+                rule=RULE_FORALL_ELIM,
+                premises=(7,),
+                term=X,
+            ),
+            ProofStep(
+                conclusion=Eq(
+                    Add(X, Succ(Y)),
+                    Succ(Add(X, Y)),
+                ),
+                rule=RULE_FORALL_ELIM,
+                premises=(8,),
+                term=Y,
+            ),
+            ProofStep(
+                conclusion=Eq(
+                    Succ(Add(X, Y)),
+                    Succ(Add(Y, X)),
+                ),
+                rule=RULE_EQ_SUCC_CONGRUENCE,
+                premises=(6,),
+            ),
+            ProofStep(
+                conclusion=Eq(
+                    Add(X, Succ(Y)),
+                    Succ(Add(Y, X)),
+                ),
+                rule=RULE_EQ_TRANSITIVITY,
+                premises=(9, 10),
+            ),
+            ProofStep(
+                conclusion=ForAll(X, ForAll(Z, succ_add_body)),
+                rule=RULE_THEOREM,
+                source="T6_SUCC_ADD",
+            ),
+            ProofStep(
+                conclusion=ForAll(
+                    Z,
+                    Eq(Add(Succ(Y), Z), Succ(Add(Y, Z))),
+                ),
+                rule=RULE_FORALL_ELIM,
+                premises=(12,),
+                term=Y,
+            ),
+            ProofStep(
+                conclusion=Eq(
+                    Add(Succ(Y), X),
+                    Succ(Add(Y, X)),
+                ),
+                rule=RULE_FORALL_ELIM,
+                premises=(13,),
+                term=X,
+            ),
+            ProofStep(
+                conclusion=Eq(
+                    Succ(Add(Y, X)),
+                    Add(Succ(Y), X),
+                ),
+                rule=RULE_EQ_SYMMETRY,
+                premises=(14,),
+            ),
+            ProofStep(
+                conclusion=comm_step,
+                rule=RULE_EQ_TRANSITIVITY,
+                premises=(11, 15),
+            ),
+            ProofStep(
+                conclusion=ForAll(Y, comm_body),
+                rule=RULE_INDUCTION,
+                premises=(5, 16),
+                variable=Y,
+                discharge=6,
+            ),
+            ProofStep(
+                conclusion=ForAll(X, ForAll(Y, comm_body)),
+                rule=RULE_FORALL_INTRO,
+                premises=(17,),
+                variable=X,
+            ),
+        ),
+    )
+    state.add_theorem("T7_ADD_COMMUTATIVE", proof_t7)
+
     return state
 
 
@@ -928,8 +1272,8 @@ def print_world() -> None:
         print(f"  - {rule.name}")
 
 
-def phase4_demo() -> None:
-    print("Gareen Phase 4")
+def phase5_demo() -> None:
+    print("Gareen Phase 5")
     print("================")
     print_world()
 
@@ -950,4 +1294,4 @@ def phase4_demo() -> None:
 
 
 if __name__ == "__main__":
-    phase4_demo()
+    phase5_demo()
