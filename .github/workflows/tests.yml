@@ -35,3 +35,29 @@ jobs:
 
       - name: Run Artificial Mathematician demo
         run: python artificial_mathematician.py
+
+  lean-verification:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build and audit Lean project
+        uses: leanprover/lean-action@v1
+        with:
+          auto-config: false
+          build: true
+          test: false
+          use-mathlib-cache: true
+          axiom-audit: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run Python to Lean bridge demo
+        run: python lean_bridge.py --ci-demo
+
+      - name: Run Lean-backed research demo
+        run: python lean_research.py --limit 2 --json-out .gareen/lean-research-ci.json

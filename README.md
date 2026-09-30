@@ -1,10 +1,46 @@
 # Gareen
 
-Gareen is a small research project for exploring whether a machine can grow formal mathematical knowledge from a deliberately limited symbolic world.
+Gareen is a research project for exploring whether a machine can grow useful formal mathematical knowledge with minimal human guidance.
 
-The host computer and the mathematical object-world are kept separate. Python may use ordinary arithmetic, Boolean logic, memory, and control flow to execute the program, but mathematical knowledge is accepted by Gareen only when it is represented inside the formal world and passes the proof checker.
+**Architecture V2 changes the trust boundary.** Gareen no longer aims to grow its Python proof checker into a competing proof assistant. Lean 4 + Mathlib are now the trusted formal foundation for serious mathematical research, while Python remains the research/orchestration layer for conjecture generation, strategy selection, memory, ranking, and future concept invention.
 
-## Phase 11 — Artificial Mathematician prototype
+The original Python formal world from Phases 1–11 is retained as a transparent educational and research sandbox. It is valuable for experimentation, but new durable mathematical claims should be checked by Lean's kernel.
+
+## Phases 12–14 — Lean transformation
+
+### Current architecture
+
+```text
+Gareen research layer (Python)
+  ├─ pattern mining
+  ├─ conjecture generation
+  ├─ research memory
+  ├─ strategy / lemma proposals
+  └─ future interestingness + concept invention
+              │
+              ▼
+        Python → Lean bridge
+              │
+              ▼
+Lean 4 + Mathlib + prover backends
+              │
+              ▼
+          Lean kernel
+              │
+              ▼
+     verified knowledge
+```
+
+The repository pins Lean/Mathlib to the stable `v4.34.1` line. Representative arithmetic theorems now live in `Gareen/Arithmetic.lean`, and `Gareen/NumberTheory.lean` begins using Mathlib's mature divisibility and primality vocabulary.
+
+`lean_bridge.py` translates Gareen formulas to Lean propositions and checks them with a bounded tactic portfolio. `lean_research.py` connects Gareen's conjecture generator to that bridge and records only Lean-verified discoveries.
+
+See:
+
+- `docs/ARCHITECTURE_V2.md`
+- `docs/LEAN_MIGRATION.md`
+
+## Legacy sandbox — Phases 1–11
 
 Gareen now distinguishes:
 
@@ -651,52 +687,75 @@ The object-world never asks Python to calculate integer `2 + 3`.
 
 ## Run
 
-Requires Python 3.10+ and no third-party packages.
+### Python research sandbox
 
-```bash
-python math_world.py
-```
-
-Run tests:
+Requires Python 3.10+ and no third-party Python packages:
 
 ```bash
 python -m unittest discover -s tests -v
+python artificial_mathematician.py
+```
+
+### Lean foundation
+
+Install Lean via `elan`, then:
+
+```bash
+lake update
+lake exe cache get
+lake build
+```
+
+Run the Python → Lean verification bridge:
+
+```bash
+python lean_bridge.py --ci-demo
+```
+
+Run a small Lean-backed Gareen research campaign:
+
+```bash
+python lean_research.py --limit 3
 ```
 
 ## Current boundary
 
-This is still a tiny fragment, not full Peano Arithmetic.
+The Python sandbox is intentionally a tiny formal world and will no longer be expanded to duplicate mature proof-assistant functionality.
 
-Gareen now includes addition, recursive multiplication, universal quantification, and a deliberately small induction rule, but it still does **not** include:
+Lean/Mathlib now gives Gareen access to a much larger mathematical foundation, including number-theory concepts that we should reuse rather than rebuild. Gareen itself still lacks:
 
-- existential quantification;
-- a general equality substitution rule;
-- richer induction planning across multiple possible induction variables;
-- recursive lemma invention rather than a single bounded helper layer;
-- semantic theorem-interest scoring;
-- persistent discovery campaigns and replayable search traces;
-- definitions and concept invention;
-- existential reasoning, order, divisibility, and prime-number concepts;
-- Lean;
-- LLMs or agents.
+- strong external Lean prover integration;
+- persistent multi-day research campaigns;
+- recursive lemma invention;
+- robust theorem interestingness / novelty scoring;
+- concept and definition invention;
+- large-scale benchmark evaluation;
+- comparison against LeanConjecturer and modern Lean provers;
+- LLM-guided research strategy.
 
-Those should be added gradually, only after each lower layer is testable and auditable.
+The next work should improve those research capabilities rather than recreating Lean internals.
 
 ## Next milestone
 
-The next milestone should focus less on adding school-arithmetic identities and more on the **research process**:
+The next milestone is **prover and benchmark integration**, not another custom arithmetic layer:
 
 ```text
-persistent campaign memory
-proof-failure analysis
-recursive lemma invention
+baseline: native Mathlib tactics
+        ↓
+BFS-Prover-V2 / Discover-and-Prove adapters
+        ↓
+Seed-Prover evaluation
+        ↓
+LeanConjecturer comparison
+        ↓
+persistent research memory + failure analysis
+        ↓
 novelty / reuse / dependency-impact scoring
-concept and definition proposal
-order, divisibility, and prime-number language
-comparison of independent discovery paths
+        ↓
+recursive lemma and concept invention
 ```
 
-A future LLM or agent may guide conjecture ranking and strategy choice, but the formal verifier should remain deterministic and separate.
+The research layer may eventually use agents or LLMs, but mathematical acceptance remains delegated to Lean's kernel.
 
 ## Research question
 
