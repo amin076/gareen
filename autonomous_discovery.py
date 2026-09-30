@@ -178,6 +178,13 @@ def generate_candidate_statements(
     )
 
 
+def _next_discovery_name(state: KnowledgeState) -> str:
+    index = 1
+    while f"D{index}_AUTO" in state.theorems:
+        index += 1
+    return f"D{index}_AUTO"
+
+
 class AutonomousTheoremExplorer:
     """Generate, prove, verify, and store bounded candidate theorems."""
 
@@ -269,7 +276,7 @@ class AutonomousTheoremExplorer:
                 )
                 continue
 
-            theorem_name = f"D{len(discoveries) + 1}_AUTO"
+            theorem_name = _next_discovery_name(state)
             theorem = state.add_theorem(
                 theorem_name,
                 result.proof,
