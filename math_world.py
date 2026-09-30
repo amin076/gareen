@@ -1,4 +1,4 @@
-"""Gareen Phase 5: induction, generalization, and addition commutativity.
+"""Gareen Phase 6: addition associativity and recursive multiplication.
 
 The host Python runtime is meta-level infrastructure. Mathematical knowledge is
 accepted into Gareen only when it is represented in the object-world and passes
@@ -46,10 +46,20 @@ class Add(Expr):
         return f"Add({self.left}, {self.right})"
 
 
+@dataclass(frozen=True)
+class Mul(Expr):
+    left: Expr
+    right: Expr
+
+    def __str__(self) -> str:
+        return f"Mul({self.left}, {self.right})"
+
+
 ZERO = Zero()
 X = Var("x")
 Y = Var("y")
 Z = Var("z")
+W = Var("w")
 
 
 class Formula:
@@ -147,6 +157,7 @@ ARITHMETIC_PRIMITIVES = (
     PrimitiveSymbol("0", "constant", 0, "Distinguished zero symbol."),
     PrimitiveSymbol("S", "function", 1, "Successor function symbol."),
     PrimitiveSymbol("Add", "function", 2, "Binary addition function symbol."),
+    PrimitiveSymbol("Mul", "function", 2, "Binary multiplication function symbol."),
 )
 
 LOGICAL_PRIMITIVES = (
@@ -191,11 +202,31 @@ AXIOM_ADD_SUCCESSOR = Axiom(
     "Addition is characterized recursively on the second argument.",
 )
 
+AXIOM_MUL_ZERO = Axiom(
+    "A5_MUL_ZERO",
+    ForAll(X, Eq(Mul(X, ZERO), ZERO)),
+    "Multiplying by zero on the right gives zero.",
+)
+
+AXIOM_MUL_SUCCESSOR = Axiom(
+    "A6_MUL_SUCCESSOR",
+    ForAll(
+        X,
+        ForAll(
+            Y,
+            Eq(Mul(X, Succ(Y)), Add(Mul(X, Y), X)),
+        ),
+    ),
+    "Multiplication is characterized recursively on the second argument.",
+)
+
 AXIOMS = (
     AXIOM_S_NONZERO,
     AXIOM_S_INJECTIVE,
     AXIOM_ADD_ZERO,
     AXIOM_ADD_SUCCESSOR,
+    AXIOM_MUL_ZERO,
+    AXIOM_MUL_SUCCESSOR,
 )
 
 RULE_AXIOM = "AXIOM"
@@ -208,6 +239,8 @@ RULE_EQ_SYMMETRY = "EQ_SYMMETRY"
 RULE_CONTRADICTION = "CONTRADICTION"
 RULE_NEGATION_INTRO = "NEGATION_INTRO"
 RULE_EQ_SUCC_CONGRUENCE = "EQ_SUCC_CONGRUENCE"
+RULE_EQ_ADD_LEFT_CONGRUENCE = "EQ_ADD_LEFT_CONGRUENCE"
+RULE_EQ_ADD_RIGHT_CONGRUENCE = "EQ_ADD_RIGHT_CONGRUENCE"
 RULE_EQ_TRANSITIVITY = "EQ_TRANSITIVITY"
 RULE_INDUCTION = "INDUCTION"
 
@@ -230,6 +263,14 @@ INFERENCE_RULES = (
     InferenceRule(
         RULE_EQ_SUCC_CONGRUENCE,
         "From a=b, derive S(a)=S(b).",
+    ),
+    InferenceRule(
+        RULE_EQ_ADD_LEFT_CONGRUENCE,
+        "From a=b, derive Add(a,c)=Add(b,c).",
+    ),
+    InferenceRule(
+        RULE_EQ_ADD_RIGHT_CONGRUENCE,
+        "From a=b, derive Add(c,a)=Add(c,b).",
     ),
     InferenceRule(
         RULE_EQ_TRANSITIVITY,
@@ -259,6 +300,8 @@ class RewriteStep:
 
 ADD_ZERO = AXIOM_ADD_ZERO.name
 ADD_SUCC = AXIOM_ADD_SUCCESSOR.name
+MUL_ZERO = AXIOM_MUL_ZERO.name
+MUL_SUCC = AXIOM_MUL_SUCCESSOR.name
 
 
 def rewrite_once(expr: Expr) -> Optional[RewriteStep]:
@@ -280,6 +323,27 @@ def rewrite_once(expr: Expr) -> Optional[RewriteStep]:
         right_step = rewrite_once(expr.right)
         if right_step is not None:
             return RewriteStep(expr, Add(expr.left, right_step.after), right_step.rule)
+
+        return None
+
+    if isinstance(expr, Mul):
+        if isinstance(expr.right, Zero):
+            return RewriteStep(expr, ZERO, MUL_ZERO)
+
+        if isinstance(expr.right, Succ):
+            return RewriteStep(
+                expr,
+                Add(Mul(expr.left, expr.right.value), expr.left),
+                MUL_SUCC,
+            )
+
+        left_step = rewrite_once(expr.left)
+        if left_step is not None:
+            return RewriteStep(expr, Mul(left_step.after, expr.right), left_step.rule)
+
+        right_step = rewrite_once(expr.right)
+        if right_step is not None:
+            return RewriteStep(expr, Mul(expr.left, right_step.after), right_step.rule)
 
         return None
 
@@ -324,6 +388,11 @@ def substitute_expr(expr: Expr, variable: Var, replacement: Expr) -> Expr:
             substitute_expr(expr.left, variable, replacement),
             substitute_expr(expr.right, variable, replacement),
         )
+    if isinstance(expr, Mul):
+        return Mul(
+            substitute_expr(expr.left, variable, replacement),
+            substitute_expr(expr.right, variable, replacement),
+        )
     raise TypeError(f"Unsupported expression type: {type(expr)!r}")
 
 
@@ -335,6 +404,8 @@ def free_vars_expr(expr: Expr) -> frozenset[Var]:
     if isinstance(expr, Succ):
         return free_vars_expr(expr.value)
     if isinstance(expr, Add):
+        return free_vars_expr(expr.left) | free_vars_expr(expr.right)
+    if isinstance(expr, Mul):
         return free_vars_expr(expr.left) | free_vars_expr(expr.right)
     raise TypeError(f"Unsupported expression type: {type(expr)!r}")
 
@@ -350,6 +421,42 @@ def free_vars_formula(formula: Formula) -> frozenset[Var]:
         return free_vars_formula(formula.body) - frozenset({formula.variable})
     if isinstance(formula, Bottom):
         return frozenset()
+    raise TypeError(f"Unsupported formula type: {type(formula)!r}")
+
+
+def is_free_for(
+    replacement: Expr,
+    variable: Var,
+    formula: Formula,
+) -> bool:
+    """Return whether replacement is free for variable in formula.
+
+    Gareen currently rejects substitutions that would capture a free variable
+    instead of silently alpha-renaming bound variables.
+    """
+
+    replacement_vars = free_vars_expr(replacement)
+
+    if isinstance(formula, Eq):
+        return True
+    if isinstance(formula, Not):
+        return is_free_for(replacement, variable, formula.formula)
+    if isinstance(formula, Implies):
+        return (
+            is_free_for(replacement, variable, formula.premise)
+            and is_free_for(replacement, variable, formula.conclusion)
+        )
+    if isinstance(formula, ForAll):
+        if formula.variable == variable:
+            return True
+        if (
+            formula.variable in replacement_vars
+            and variable in free_vars_formula(formula.body)
+        ):
+            return False
+        return is_free_for(replacement, variable, formula.body)
+    if isinstance(formula, Bottom):
+        return True
     raise TypeError(f"Unsupported formula type: {type(formula)!r}")
 
 
@@ -482,6 +589,14 @@ def check_proof(
                 errors.append(f"{prefix}: premise is not universally quantified")
             elif step.term is None:
                 errors.append(f"{prefix}: FORALL_ELIM requires a term")
+            elif not is_free_for(
+                step.term,
+                source_formula.variable,
+                source_formula.body,
+            ):
+                errors.append(
+                    f"{prefix}: universal instantiation would capture a variable"
+                )
             else:
                 expected = substitute_formula(
                     source_formula.body,
@@ -568,6 +683,46 @@ def check_proof(
                 errors.append(f"{prefix}: premise is not an equality")
             elif step.conclusion != Eq(Succ(equality.left), Succ(equality.right)):
                 errors.append(f"{prefix}: successor congruence is malformed")
+
+            dependencies.append(inherited)
+            continue
+
+        if step.rule == RULE_EQ_ADD_LEFT_CONGRUENCE:
+            if len(premise_steps) != 1:
+                errors.append(f"{prefix}: EQ_ADD_LEFT_CONGRUENCE needs one premise")
+                dependencies.append(inherited)
+                continue
+
+            equality = premise_steps[0].conclusion
+            if not isinstance(equality, Eq):
+                errors.append(f"{prefix}: premise is not an equality")
+            elif step.term is None:
+                errors.append(f"{prefix}: EQ_ADD_LEFT_CONGRUENCE requires a term")
+            elif step.conclusion != Eq(
+                Add(equality.left, step.term),
+                Add(equality.right, step.term),
+            ):
+                errors.append(f"{prefix}: left Add congruence is malformed")
+
+            dependencies.append(inherited)
+            continue
+
+        if step.rule == RULE_EQ_ADD_RIGHT_CONGRUENCE:
+            if len(premise_steps) != 1:
+                errors.append(f"{prefix}: EQ_ADD_RIGHT_CONGRUENCE needs one premise")
+                dependencies.append(inherited)
+                continue
+
+            equality = premise_steps[0].conclusion
+            if not isinstance(equality, Eq):
+                errors.append(f"{prefix}: premise is not an equality")
+            elif step.term is None:
+                errors.append(f"{prefix}: EQ_ADD_RIGHT_CONGRUENCE requires a term")
+            elif step.conclusion != Eq(
+                Add(step.term, equality.left),
+                Add(step.term, equality.right),
+            ):
+                errors.append(f"{prefix}: right Add congruence is malformed")
 
             dependencies.append(inherited)
             continue
@@ -1247,6 +1402,366 @@ def build_initial_knowledge() -> KnowledgeState:
     )
     state.add_theorem("T7_ADD_COMMUTATIVE", proof_t7)
 
+    # T8: associativity of addition.
+    # We use x, z as fixed parameters and induct on w. Variable names are
+    # immaterial; the theorem is the usual (a+b)+c = a+(b+c).
+    assoc_body = Eq(
+        Add(Add(X, Z), W),
+        Add(X, Add(Z, W)),
+    )
+    assoc_base = Eq(
+        Add(Add(X, Z), ZERO),
+        Add(X, Add(Z, ZERO)),
+    )
+    assoc_step = Eq(
+        Add(Add(X, Z), Succ(W)),
+        Add(X, Add(Z, Succ(W))),
+    )
+
+    proof_t8 = Proof(
+        statement=ForAll(X, ForAll(Z, ForAll(W, assoc_body))),
+        steps=(
+            ProofStep(
+                conclusion=AXIOM_ADD_ZERO.formula,
+                rule=RULE_AXIOM,
+                source=AXIOM_ADD_ZERO.name,
+            ),
+            ProofStep(
+                conclusion=Eq(Add(Add(X, Z), ZERO), Add(X, Z)),
+                rule=RULE_FORALL_ELIM,
+                premises=(0,),
+                term=Add(X, Z),
+            ),
+            ProofStep(
+                conclusion=Eq(Add(Z, ZERO), Z),
+                rule=RULE_FORALL_ELIM,
+                premises=(0,),
+                term=Z,
+            ),
+            ProofStep(
+                conclusion=Eq(
+                    Add(X, Add(Z, ZERO)),
+                    Add(X, Z),
+                ),
+                rule=RULE_EQ_ADD_RIGHT_CONGRUENCE,
+                premises=(2,),
+                term=X,
+            ),
+            ProofStep(
+                conclusion=Eq(
+                    Add(X, Z),
+                    Add(X, Add(Z, ZERO)),
+                ),
+                rule=RULE_EQ_SYMMETRY,
+                premises=(3,),
+            ),
+            ProofStep(
+                conclusion=assoc_base,
+                rule=RULE_EQ_TRANSITIVITY,
+                premises=(1, 4),
+            ),
+            ProofStep(
+                conclusion=assoc_body,
+                rule=RULE_ASSUMPTION,
+                note="Induction hypothesis for associativity.",
+            ),
+            ProofStep(
+                conclusion=AXIOM_ADD_SUCCESSOR.formula,
+                rule=RULE_AXIOM,
+                source=AXIOM_ADD_SUCCESSOR.name,
+            ),
+            ProofStep(
+                conclusion=ForAll(
+                    Y,
+                    Eq(
+                        Add(Add(X, Z), Succ(Y)),
+                        Succ(Add(Add(X, Z), Y)),
+                    ),
+                ),
+                rule=RULE_FORALL_ELIM,
+                premises=(7,),
+                term=Add(X, Z),
+            ),
+            ProofStep(
+                conclusion=Eq(
+                    Add(Add(X, Z), Succ(W)),
+                    Succ(Add(Add(X, Z), W)),
+                ),
+                rule=RULE_FORALL_ELIM,
+                premises=(8,),
+                term=W,
+            ),
+            ProofStep(
+                conclusion=Eq(
+                    Succ(Add(Add(X, Z), W)),
+                    Succ(Add(X, Add(Z, W))),
+                ),
+                rule=RULE_EQ_SUCC_CONGRUENCE,
+                premises=(6,),
+            ),
+            ProofStep(
+                conclusion=Eq(
+                    Add(Add(X, Z), Succ(W)),
+                    Succ(Add(X, Add(Z, W))),
+                ),
+                rule=RULE_EQ_TRANSITIVITY,
+                premises=(9, 10),
+            ),
+            ProofStep(
+                conclusion=ForAll(
+                    Y,
+                    Eq(Add(Z, Succ(Y)), Succ(Add(Z, Y))),
+                ),
+                rule=RULE_FORALL_ELIM,
+                premises=(7,),
+                term=Z,
+            ),
+            ProofStep(
+                conclusion=Eq(
+                    Add(Z, Succ(W)),
+                    Succ(Add(Z, W)),
+                ),
+                rule=RULE_FORALL_ELIM,
+                premises=(12,),
+                term=W,
+            ),
+            ProofStep(
+                conclusion=Eq(
+                    Add(X, Add(Z, Succ(W))),
+                    Add(X, Succ(Add(Z, W))),
+                ),
+                rule=RULE_EQ_ADD_RIGHT_CONGRUENCE,
+                premises=(13,),
+                term=X,
+            ),
+            ProofStep(
+                conclusion=ForAll(
+                    Y,
+                    Eq(Add(X, Succ(Y)), Succ(Add(X, Y))),
+                ),
+                rule=RULE_FORALL_ELIM,
+                premises=(7,),
+                term=X,
+            ),
+            ProofStep(
+                conclusion=Eq(
+                    Add(X, Succ(Add(Z, W))),
+                    Succ(Add(X, Add(Z, W))),
+                ),
+                rule=RULE_FORALL_ELIM,
+                premises=(15,),
+                term=Add(Z, W),
+            ),
+            ProofStep(
+                conclusion=Eq(
+                    Add(X, Add(Z, Succ(W))),
+                    Succ(Add(X, Add(Z, W))),
+                ),
+                rule=RULE_EQ_TRANSITIVITY,
+                premises=(14, 16),
+            ),
+            ProofStep(
+                conclusion=Eq(
+                    Succ(Add(X, Add(Z, W))),
+                    Add(X, Add(Z, Succ(W))),
+                ),
+                rule=RULE_EQ_SYMMETRY,
+                premises=(17,),
+            ),
+            ProofStep(
+                conclusion=assoc_step,
+                rule=RULE_EQ_TRANSITIVITY,
+                premises=(11, 18),
+            ),
+            ProofStep(
+                conclusion=ForAll(W, assoc_body),
+                rule=RULE_INDUCTION,
+                premises=(5, 19),
+                variable=W,
+                discharge=6,
+            ),
+            ProofStep(
+                conclusion=ForAll(Z, ForAll(W, assoc_body)),
+                rule=RULE_FORALL_INTRO,
+                premises=(20,),
+                variable=Z,
+            ),
+            ProofStep(
+                conclusion=ForAll(X, ForAll(Z, ForAll(W, assoc_body))),
+                rule=RULE_FORALL_INTRO,
+                premises=(21,),
+                variable=X,
+            ),
+        ),
+    )
+    state.add_theorem("T8_ADD_ASSOCIATIVE", proof_t8)
+
+    # T9: zero multiplied by any number is zero.
+    zero_mul_y = Eq(Mul(ZERO, Y), ZERO)
+    zero_mul_sy = Eq(Mul(ZERO, Succ(Y)), ZERO)
+
+    proof_t9 = Proof(
+        statement=ForAll(Y, zero_mul_y),
+        steps=(
+            ProofStep(
+                conclusion=AXIOM_MUL_ZERO.formula,
+                rule=RULE_AXIOM,
+                source=AXIOM_MUL_ZERO.name,
+            ),
+            ProofStep(
+                conclusion=Eq(Mul(ZERO, ZERO), ZERO),
+                rule=RULE_FORALL_ELIM,
+                premises=(0,),
+                term=ZERO,
+            ),
+            ProofStep(
+                conclusion=zero_mul_y,
+                rule=RULE_ASSUMPTION,
+                note="Induction hypothesis: 0*y = 0.",
+            ),
+            ProofStep(
+                conclusion=AXIOM_MUL_SUCCESSOR.formula,
+                rule=RULE_AXIOM,
+                source=AXIOM_MUL_SUCCESSOR.name,
+            ),
+            ProofStep(
+                conclusion=ForAll(
+                    Y,
+                    Eq(
+                        Mul(ZERO, Succ(Y)),
+                        Add(Mul(ZERO, Y), ZERO),
+                    ),
+                ),
+                rule=RULE_FORALL_ELIM,
+                premises=(3,),
+                term=ZERO,
+            ),
+            ProofStep(
+                conclusion=Eq(
+                    Mul(ZERO, Succ(Y)),
+                    Add(Mul(ZERO, Y), ZERO),
+                ),
+                rule=RULE_FORALL_ELIM,
+                premises=(4,),
+                term=Y,
+            ),
+            ProofStep(
+                conclusion=AXIOM_ADD_ZERO.formula,
+                rule=RULE_AXIOM,
+                source=AXIOM_ADD_ZERO.name,
+            ),
+            ProofStep(
+                conclusion=Eq(
+                    Add(Mul(ZERO, Y), ZERO),
+                    Mul(ZERO, Y),
+                ),
+                rule=RULE_FORALL_ELIM,
+                premises=(6,),
+                term=Mul(ZERO, Y),
+            ),
+            ProofStep(
+                conclusion=Eq(
+                    Mul(ZERO, Succ(Y)),
+                    Mul(ZERO, Y),
+                ),
+                rule=RULE_EQ_TRANSITIVITY,
+                premises=(5, 7),
+            ),
+            ProofStep(
+                conclusion=zero_mul_sy,
+                rule=RULE_EQ_TRANSITIVITY,
+                premises=(8, 2),
+            ),
+            ProofStep(
+                conclusion=ForAll(Y, zero_mul_y),
+                rule=RULE_INDUCTION,
+                premises=(1, 9),
+                variable=Y,
+                discharge=2,
+            ),
+        ),
+    )
+    state.add_theorem("T9_ZERO_MUL_X", proof_t9)
+
+    # T10: multiplying by one on the right leaves a number unchanged.
+    mul_one_x = Eq(Mul(X, ONE), X)
+    proof_t10 = Proof(
+        statement=ForAll(X, mul_one_x),
+        steps=(
+            ProofStep(
+                conclusion=AXIOM_MUL_SUCCESSOR.formula,
+                rule=RULE_AXIOM,
+                source=AXIOM_MUL_SUCCESSOR.name,
+            ),
+            ProofStep(
+                conclusion=ForAll(
+                    Y,
+                    Eq(Mul(X, Succ(Y)), Add(Mul(X, Y), X)),
+                ),
+                rule=RULE_FORALL_ELIM,
+                premises=(0,),
+                term=X,
+            ),
+            ProofStep(
+                conclusion=Eq(
+                    Mul(X, ONE),
+                    Add(Mul(X, ZERO), X),
+                ),
+                rule=RULE_FORALL_ELIM,
+                premises=(1,),
+                term=ZERO,
+            ),
+            ProofStep(
+                conclusion=AXIOM_MUL_ZERO.formula,
+                rule=RULE_AXIOM,
+                source=AXIOM_MUL_ZERO.name,
+            ),
+            ProofStep(
+                conclusion=Eq(Mul(X, ZERO), ZERO),
+                rule=RULE_FORALL_ELIM,
+                premises=(3,),
+                term=X,
+            ),
+            ProofStep(
+                conclusion=Eq(
+                    Add(Mul(X, ZERO), X),
+                    Add(ZERO, X),
+                ),
+                rule=RULE_EQ_ADD_LEFT_CONGRUENCE,
+                premises=(4,),
+                term=X,
+            ),
+            ProofStep(
+                conclusion=ForAll(X, Eq(Add(ZERO, X), X)),
+                rule=RULE_THEOREM,
+                source="T5_ZERO_PLUS_X",
+            ),
+            ProofStep(
+                conclusion=Eq(Add(ZERO, X), X),
+                rule=RULE_FORALL_ELIM,
+                premises=(6,),
+                term=X,
+            ),
+            ProofStep(
+                conclusion=Eq(Mul(X, ONE), Add(ZERO, X)),
+                rule=RULE_EQ_TRANSITIVITY,
+                premises=(2, 5),
+            ),
+            ProofStep(
+                conclusion=mul_one_x,
+                rule=RULE_EQ_TRANSITIVITY,
+                premises=(8, 7),
+            ),
+            ProofStep(
+                conclusion=ForAll(X, mul_one_x),
+                rule=RULE_FORALL_INTRO,
+                premises=(9,),
+                variable=X,
+            ),
+        ),
+    )
+    state.add_theorem("T10_MUL_ONE", proof_t10)
+
     return state
 
 
@@ -1272,8 +1787,8 @@ def print_world() -> None:
         print(f"  - {rule.name}")
 
 
-def phase5_demo() -> None:
-    print("Gareen Phase 5")
+def phase6_demo() -> None:
+    print("Gareen Phase 6")
     print("================")
     print_world()
 
@@ -1292,6 +1807,15 @@ def phase5_demo() -> None:
         print("    ", step.before, "=>", step.after)
     print("Result:", result)
 
+    product = Mul(TWO, THREE)
+    product_result, product_trace = normalize(product)
+    print("\nSymbolic multiplication demo:")
+    print("Start :", product)
+    for index, step in enumerate(product_trace, start=1):
+        print(f"{index:>2}. {step.rule}")
+        print("    ", step.before, "=>", step.after)
+    print("Result:", product_result)
+
 
 if __name__ == "__main__":
-    phase5_demo()
+    phase6_demo()
