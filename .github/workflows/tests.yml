@@ -29,3 +29,6 @@ jobs:
 
       - name: Run autonomous theorem discovery demo
         run: python autonomous_discovery.py
+
+      - name: Run general conjecture discovery demo
+        run: python general_conjecture.py
