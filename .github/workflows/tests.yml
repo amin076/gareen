@@ -32,3 +32,6 @@ jobs:
 
       - name: Run general conjecture discovery demo
         run: python general_conjecture.py
+
+      - name: Run Artificial Mathematician demo
+        run: python artificial_mathematician.py
