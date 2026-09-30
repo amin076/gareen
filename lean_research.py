@@ -45,9 +45,7 @@ class LeanResearchGateway:
         max_attempts: int = 5,
     ) -> None:
         self.provider = provider or LocalTacticPortfolio()
-        self.verifier = verifier or LeanVerifier(
-            tactics=self.provider.candidates(None)  # type: ignore[arg-type]
-        )
+        self.verifier = verifier or LeanVerifier()
         self.max_attempts = max_attempts
 
     def verify_formula(
