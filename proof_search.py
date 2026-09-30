@@ -78,6 +78,13 @@ class SearchResult:
     stats: SearchStats
 
 
+@dataclass(frozen=True)
+class DerivationSearchResult:
+    goal: Formula
+    root: Optional[Derivation]
+    stats: SearchStats
+
+
 def _expr_size(expr: Expr) -> int:
     if isinstance(expr, (Var, type(ZERO))):
         return 1
@@ -110,10 +117,16 @@ def _is_ground(expr: Expr) -> bool:
     return not free_vars_expr(expr)
 
 
-def _compile_derivation(goal: Formula, root: Derivation) -> Proof:
+def compile_derivation(goal: Formula, root: Derivation) -> Proof:
+    """Compile a derivation DAG into proof steps, reusing identical subproofs."""
+
     steps: list[ProofStep] = []
+    emitted: dict[Derivation, int] = {}
 
     def emit(node: Derivation) -> int:
+        if node in emitted:
+            return emitted[node]
+
         premise_indices = tuple(emit(premise) for premise in node.premises)
         index = len(steps)
         steps.append(
@@ -125,6 +138,7 @@ def _compile_derivation(goal: Formula, root: Derivation) -> Proof:
                 term=node.term,
             )
         )
+        emitted[node] = index
         return index
 
     final_index = emit(root)
@@ -132,6 +146,9 @@ def _compile_derivation(goal: Formula, root: Derivation) -> Proof:
         raise RuntimeError("Proof compilation did not end at the root")
 
     return Proof(statement=goal, steps=tuple(steps))
+
+
+_compile_derivation = compile_derivation
 
 
 class BoundedProofSearcher:
@@ -162,11 +179,31 @@ class BoundedProofSearcher:
         self._equality_calls = 0
         self._memo: dict[tuple[Expr, Expr, int], Optional[Derivation]] = {}
 
-    def prove(self, goal: Formula, state: KnowledgeState) -> SearchResult:
+    def derive(
+        self,
+        goal: Formula,
+        state: KnowledgeState,
+        *,
+        assumptions: tuple[Formula, ...] = (),
+    ) -> DerivationSearchResult:
+        """Search for a derivation without requiring assumptions to be discharged.
+
+        This method is intentionally untrusted. It is used by higher-level
+        strategy synthesis, which must embed the derivation into a complete proof
+        and submit that full proof to the trusted checker.
+        """
+
         goal_terms = _formula_terms(goal)
+        assumption_terms = set()
+        for assumption in assumptions:
+            assumption_terms |= _formula_terms(assumption)
+
         if (
             not self.allow_open_goals
-            and any(not _is_ground(term) for term in goal_terms)
+            and any(
+                not _is_ground(term)
+                for term in goal_terms | assumption_terms
+            )
         ):
             raise ValueError(
                 "This searcher is configured for closed/ground goals only"
@@ -178,6 +215,7 @@ class BoundedProofSearcher:
             TWO,
             THREE,
             *goal_terms,
+            *assumption_terms,
         }
 
         self._direct = {}
@@ -189,9 +227,10 @@ class BoundedProofSearcher:
             rounds_used = round_index + 1
             ordered_terms = self._ordered_terms(terms)
             self._instantiate_sources(
-                AXIOMS,
+                state.world.axioms,
                 tuple(state.theorems.values()),
                 ordered_terms,
+                assumptions=assumptions,
             )
 
             expanded = set(terms)
@@ -221,16 +260,25 @@ class BoundedProofSearcher:
                 frozenset(),
             )
 
-        if root is None:
+        return DerivationSearchResult(
+            goal=goal,
+            root=root,
+            stats=self._stats(rounds_used),
+        )
+
+    def prove(self, goal: Formula, state: KnowledgeState) -> SearchResult:
+        derivation = self.derive(goal, state)
+
+        if derivation.root is None:
             return SearchResult(
                 goal=goal,
                 found=False,
                 proof=None,
                 check=None,
-                stats=self._stats(rounds_used),
+                stats=derivation.stats,
             )
 
-        proof = _compile_derivation(goal, root)
+        proof = compile_derivation(goal, derivation.root)
         check = check_proof(
             proof,
             axioms=state.world.axioms,
@@ -242,7 +290,7 @@ class BoundedProofSearcher:
             found=check.valid,
             proof=proof if check.valid else None,
             check=check,
-            stats=self._stats(rounds_used),
+            stats=derivation.stats,
         )
 
     def prove_and_add(
@@ -283,7 +331,17 @@ class BoundedProofSearcher:
         axioms,
         theorems: tuple[Theorem, ...],
         terms: list[Expr],
+        *,
+        assumptions: tuple[Formula, ...] = (),
     ) -> None:
+        for assumption in assumptions:
+            self._remember(
+                Derivation(
+                    conclusion=assumption,
+                    rule="ASSUMPTION",
+                )
+            )
+
         for axiom in axioms:
             root = Derivation(
                 conclusion=axiom.formula,
