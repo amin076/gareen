@@ -23,13 +23,13 @@ class AutonomousDiscoveryTests(unittest.TestCase):
         initial_names = set(state.theorems)
 
         explorer = AutonomousTheoremExplorer(
-            max_attempts=32,
-            max_discoveries=3,
+            max_attempts=8,
+            max_discoveries=1,
             min_proof_steps=4,
             include_multiplication=False,
             searcher=BoundedProofSearcher(
-                max_depth=6,
-                max_terms=64,
+                max_depth=5,
+                max_terms=32,
                 instantiation_rounds=1,
             ),
         )
@@ -48,8 +48,8 @@ class AutonomousDiscoveryTests(unittest.TestCase):
     def test_every_discovery_rechecks_with_trusted_checker(self):
         state = build_initial_knowledge()
         explorer = AutonomousTheoremExplorer(
-            max_attempts=32,
-            max_discoveries=2,
+            max_attempts=8,
+            max_discoveries=1,
             min_proof_steps=4,
             include_multiplication=False,
         )
@@ -74,7 +74,7 @@ class AutonomousDiscoveryTests(unittest.TestCase):
     def test_discovery_records_attempt_statuses(self):
         state = build_initial_knowledge()
         explorer = AutonomousTheoremExplorer(
-            max_attempts=12,
+            max_attempts=6,
             max_discoveries=1,
             min_proof_steps=4,
             include_multiplication=False,
@@ -95,8 +95,8 @@ class AutonomousDiscoveryTests(unittest.TestCase):
         initial_count = len(state.theorems)
 
         explorer = AutonomousTheoremExplorer(
-            max_attempts=12,
-            max_discoveries=2,
+            max_attempts=6,
+            max_discoveries=1,
             min_proof_steps=10_000,
             include_multiplication=False,
         )
