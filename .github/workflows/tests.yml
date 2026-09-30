@@ -26,3 +26,6 @@ jobs:
 
       - name: Run automatic proof search demo
         run: python proof_search.py
+
+      - name: Run autonomous theorem discovery demo
+        run: python autonomous_discovery.py
