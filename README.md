@@ -4,7 +4,7 @@ Gareen is a small research project for exploring whether a machine can grow form
 
 The host computer and the mathematical object-world are kept separate. Python may use ordinary arithmetic, Boolean logic, memory, and control flow to execute the program, but mathematical knowledge is accepted by Gareen only when it is represented inside the formal world and passes the proof checker.
 
-## Phase 4 — Induction and the first general theorem
+## Phase 5 — Generalization and commutativity of addition
 
 Gareen now distinguishes:
 
@@ -18,7 +18,7 @@ verified theorems
 knowledge state
 ```
 
-Gareen now goes beyond finite examples and can verify a small induction proof. This is the first phase where a genuinely general arithmetic theorem is derived from the starting axioms.
+Gareen now verifies nested universal theorems and derives commutativity of addition from the small starting system. Universal introduction is checked so a variable cannot be generalized while it remains free in an open assumption.
 
 ### Arithmetic primitives
 
@@ -73,6 +73,7 @@ AXIOM
 THEOREM
 ASSUMPTION
 FORALL_ELIM
+FORALL_INTRO
 MODUS_PONENS
 EQ_SYMMETRY
 EQ_SUCC_CONGRUENCE
@@ -145,6 +146,57 @@ Therefore:
 ```
 
 The temporary induction hypothesis is tracked as an open assumption and must be discharged by the `INDUCTION` rule before the theorem is accepted.
+
+### Successor on the left
+
+Before proving commutativity, Gareen derives the helper theorem:
+
+```text
+T6_SUCC_ADD
+∀x∀z. Add(S(x), z) = S(Add(x, z))
+```
+
+The proof is by induction on `z`. Its base case uses `A3_ADD_ZERO`; its induction step uses `A4_ADD_SUCCESSOR`, successor congruence, equality symmetry, and equality transitivity.
+
+After induction produces a theorem with free `x`, `FORALL_INTRO` generalizes over `x`. The checker rejects this step if `x` occurs free in an open assumption.
+
+### Commutativity of addition
+
+Gareen then derives:
+
+```text
+T7_ADD_COMMUTATIVE
+∀x∀y. Add(x, y) = Add(y, x)
+```
+
+The proof is by induction on `y`.
+
+Base case:
+
+```text
+x + 0 = x        from A3
+0 + x = x        from T5
+therefore x + 0 = 0 + x
+```
+
+Induction step, assuming:
+
+```text
+x + y = y + x
+```
+
+Gareen derives:
+
+```text
+x + S(y)
+= S(x + y)       from A4
+= S(y + x)       by successor congruence
+= S(y) + x       from T6
+```
+
+and then discharges the induction hypothesis and universally quantifies both variables.
+
+So commutativity is stored as **derived knowledge**, not as an axiom.
 
 ### Why T3 matters
 
@@ -235,14 +287,15 @@ Those should be added gradually, only after each lower layer is testable and aud
 
 ## Next milestone
 
-The next mathematically meaningful step is to use the new induction machinery to derive stronger laws of addition, especially:
+The next mathematically meaningful targets are associativity of addition and then multiplication:
 
 ```text
-S(x) + y = S(x + y)
-x + y = y + x
+(x + y) + z = x + (y + z)
+x × 0 = 0
+x × S(y) = (x × y) + x
 ```
 
-The second statement is commutativity of addition. It should remain a theorem derived from the small starting system, not a new axiom.
+Multiplication should be introduced only after the addition layer is sufficiently proven and tested.
 
 ## Research question
 
