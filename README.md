@@ -4,7 +4,7 @@ Gareen is a small research project for exploring whether a machine can grow form
 
 The host computer and the mathematical object-world are kept separate. Python may use ordinary arithmetic, Boolean logic, memory, and control flow to execute the program, but mathematical knowledge is accepted by Gareen only when it is represented inside the formal world and passes the proof checker.
 
-## Phase 7 — Core multiplication laws
+## Phase 8 — Automatic proof search
 
 Gareen now distinguishes:
 
@@ -18,7 +18,7 @@ verified theorems
 knowledge state
 ```
 
-Gareen now derives the main algebraic laws of multiplication from the recursive multiplication axioms and previously verified addition theorems. The proof graph now contains multi-stage dependencies rather than isolated arithmetic facts.
+Gareen now has a separate bounded proof-search layer. The searcher proposes proof trees from existing axioms, theorems, universal instantiation, equality symmetry, congruence, and transitivity; the original trusted checker remains the only component allowed to accept a proof.
 
 ### Arithmetic primitives
 
@@ -297,6 +297,48 @@ T14 multiplication associativity
 
 None of these four multiplication laws is inserted as a new arithmetic axiom.
 
+### Automatic proof search
+
+`proof_search.py` is intentionally separate from the trusted checker.
+
+The Phase 8 searcher currently accepts **closed / ground goals** and performs a bounded search. It:
+
+```text
+collects terms from the goal
+instantiates universal axioms and verified theorems
+indexes concrete facts
+searches equality paths
+uses symmetry, congruence, and transitivity
+compiles the candidate derivation into ordinary ProofStep objects
+sends the final proof back to check_proof()
+```
+
+The first demonstration goal is:
+
+```text
+2 + 1 = 3
+```
+
+There is no hand-written proof for this target in the search module. The search layer must combine available facts and equality rules to construct a candidate proof. Only after `check_proof()` validates the complete result may it be added to the knowledge state as:
+
+```text
+AUTO_TWO_PLUS_ONE
+```
+
+This establishes a trust boundary:
+
+```text
+untrusted search / future AI
+          ↓
+candidate proof
+          ↓
+trusted deterministic checker
+          ↓
+verified theorem
+```
+
+Phase 8 deliberately does not yet search induction proofs or open-variable theorems. Those remain future work.
+
 ### Capture-safe universal instantiation
 
 `FORALL_ELIM` now checks whether substituting a term would accidentally capture one of its free variables under an inner quantifier. Gareen rejects such a proof step instead of silently accepting an invalid substitution.
@@ -380,7 +422,8 @@ Gareen now includes addition, recursive multiplication, universal quantification
 
 - existential quantification;
 - a general equality substitution rule;
-- automatic theorem search;
+- induction-aware automatic theorem search;
+- open-variable / universally quantified proof search;
 - theorem-interest scoring;
 - Lean;
 - LLMs or agents.
@@ -389,18 +432,17 @@ Those should be added gradually, only after each lower layer is testable and aud
 
 ## Next milestone
 
-The next useful step is no longer another familiar school-arithmetic identity. Gareen should begin separating **proof construction** from manually written proof scripts.
-
-A first search layer can:
+The next step is to expand search without weakening the trust boundary:
 
 ```text
-generate candidate proof steps
-check each step with the trusted proof checker
-retain only verified theorems
-record dependencies and failed attempts
+search universally quantified goals
+search induction proofs
+record failed search branches
+rank candidate lemmas
+discover useful intermediate statements
 ```
 
-That would be the transition from a hand-authored formal library toward autonomous theorem search, while keeping the verifier deterministic and auditable.
+The verifier should remain deterministic and separate even if future search is guided by heuristics, agents, or an LLM.
 
 ## Research question
 
