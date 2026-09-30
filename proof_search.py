@@ -147,7 +147,7 @@ class BoundedProofSearcher:
         *,
         max_depth: int = 5,
         max_terms: int = 48,
-        instantiation_rounds: int = 2,
+        instantiation_rounds: int = 1,
         max_direct_facts: int = 5000,
     ) -> None:
         self.max_depth = max_depth
@@ -581,7 +581,7 @@ def phase8_demo() -> None:
     """Let Gareen construct a proof that was not hand-authored."""
 
     state = __import__("math_world").build_initial_knowledge()
-    searcher = BoundedProofSearcher(max_depth=5)
+    searcher = BoundedProofSearcher(max_depth=5, instantiation_rounds=1)
 
     goal = Eq(Add(TWO, ONE), THREE)
     result = searcher.prove(goal, state)
