@@ -4,7 +4,7 @@ Gareen is a small research project for exploring whether a machine can grow form
 
 The host computer and the mathematical object-world are kept separate. Python may use ordinary arithmetic, Boolean logic, memory, and control flow to execute the program, but mathematical knowledge is accepted by Gareen only when it is represented inside the formal world and passes the proof checker.
 
-## Phase 5 — Generalization and commutativity of addition
+## Phase 6 — Addition associativity and recursive multiplication
 
 Gareen now distinguishes:
 
@@ -18,7 +18,7 @@ verified theorems
 knowledge state
 ```
 
-Gareen now verifies nested universal theorems and derives commutativity of addition from the small starting system. Universal introduction is checked so a variable cannot be generalized while it remains free in an open assumption.
+Gareen now derives both commutativity and associativity of addition, introduces multiplication as a new primitive operation with recursive axioms, and proves its first non-axiomatic laws. Universal instantiation also rejects substitutions that would capture a free variable.
 
 ### Arithmetic primitives
 
@@ -26,6 +26,7 @@ Gareen now verifies nested universal theorems and derives commutativity of addit
 0      constant
 S      unary successor function
 Add    binary addition function
+Mul    binary multiplication function
 ```
 
 ### Logical primitives
@@ -62,6 +63,12 @@ A3_ADD_ZERO
 
 A4_ADD_SUCCESSOR
 ∀x∀y. Add(x, S(y)) = S(Add(x, y))
+
+A5_MUL_ZERO
+∀x. Mul(x, 0) = 0
+
+A6_MUL_SUCCESSOR
+∀x∀y. Mul(x, S(y)) = Add(Mul(x, y), x)
 ```
 
 ### Current inference rules
@@ -77,6 +84,8 @@ FORALL_INTRO
 MODUS_PONENS
 EQ_SYMMETRY
 EQ_SUCC_CONGRUENCE
+EQ_ADD_LEFT_CONGRUENCE
+EQ_ADD_RIGHT_CONGRUENCE
 EQ_TRANSITIVITY
 CONTRADICTION
 NEGATION_INTRO
@@ -198,6 +207,50 @@ and then discharges the induction hypothesis and universally quantifies both var
 
 So commutativity is stored as **derived knowledge**, not as an axiom.
 
+### Associativity of addition
+
+Gareen next derives:
+
+```text
+T8_ADD_ASSOCIATIVE
+∀a∀b∀c. (a + b) + c = a + (b + c)
+```
+
+The proof is again by induction on the third argument. Two explicit equality-congruence rules allow an already verified equality to be used inside either argument of `Add`. No associativity axiom is added.
+
+### Multiplication enters the language
+
+Multiplication is now a new arithmetic primitive:
+
+```text
+Mul(x, y)
+```
+
+Its behavior is introduced only through two recursive axioms:
+
+```text
+A5: Mul(x, 0) = 0
+A6: Mul(x, S(y)) = Add(Mul(x, y), x)
+```
+
+So multiplication is not delegated to Python integers. The symbolic rewrite engine can now reduce expressions such as `2 × 3` using A5/A6 together with the existing addition rules.
+
+Two initial multiplication theorems are derived:
+
+```text
+T9_ZERO_MUL_X
+∀x. 0 × x = 0
+
+T10_MUL_ONE
+∀x. x × 1 = x
+```
+
+Notice the asymmetry: `x × 0 = 0` is an axiom, while `0 × x = 0` is a theorem proved by induction.
+
+### Capture-safe universal instantiation
+
+`FORALL_ELIM` now checks whether substituting a term would accidentally capture one of its free variables under an inner quantifier. Gareen rejects such a proof step instead of silently accepting an invalid substitution.
+
 ### Why T3 matters
 
 `T3_TWO_NE_THREE` reuses the already verified theorem `T2_ONE_NE_TWO`.
@@ -273,9 +326,8 @@ python -m unittest discover -s tests -v
 
 This is still a tiny fragment, not full Peano Arithmetic.
 
-Gareen now includes a deliberately small, explicit induction rule, but it still does **not** include:
+Gareen now includes addition, recursive multiplication, universal quantification, and a deliberately small induction rule, but it still does **not** include:
 
-- multiplication;
 - existential quantification;
 - a general equality substitution rule;
 - automatic theorem search;
@@ -287,15 +339,15 @@ Those should be added gradually, only after each lower layer is testable and aud
 
 ## Next milestone
 
-The next mathematically meaningful targets are associativity of addition and then multiplication:
+The next mathematically meaningful targets are multiplication laws:
 
 ```text
-(x + y) + z = x + (y + z)
-x × 0 = 0
-x × S(y) = (x × y) + x
+x × y = y × x
+(x × y) × z = x × (y × z)
+x × (y + z) = (x × y) + (x × z)
 ```
 
-Multiplication should be introduced only after the addition layer is sufficiently proven and tested.
+Those should be derived from A5/A6 and the already verified addition theorems, rather than inserted as new axioms.
 
 ## Research question
 

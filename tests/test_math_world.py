@@ -6,26 +6,34 @@ from math_world import (
     ARITHMETIC_PRIMITIVES,
     AXIOM_ADD_SUCCESSOR,
     AXIOM_ADD_ZERO,
+    AXIOM_MUL_SUCCESSOR,
+    AXIOM_MUL_ZERO,
     AXIOM_S_INJECTIVE,
     AXIOM_S_NONZERO,
     DEFINITIONS,
     INFERENCE_RULES,
     LOGICAL_PRIMITIVES,
+    MUL_SUCC,
+    MUL_ZERO,
     ONE,
     RULE_ASSUMPTION,
     RULE_AXIOM,
     RULE_FORALL_ELIM,
     RULE_FORALL_INTRO,
     RULE_INDUCTION,
+    RULE_EQ_ADD_LEFT_CONGRUENCE,
+    RULE_EQ_ADD_RIGHT_CONGRUENCE,
     THREE,
     TWO,
     Add,
     Eq,
+    Mul,
     ForAll,
     Not,
     Proof,
     ProofStep,
     Succ,
+    W,
     X,
     Y,
     Z,
@@ -41,7 +49,7 @@ class FormalWorldTests(unittest.TestCase):
     def test_arithmetic_primitives_are_explicit(self):
         self.assertEqual(
             [x.name for x in ARITHMETIC_PRIMITIVES],
-            ["0", "S", "Add"],
+            ["0", "S", "Add", "Mul"],
         )
 
     def test_logical_primitives_are_explicit(self):
@@ -61,6 +69,8 @@ class FormalWorldTests(unittest.TestCase):
         self.assertIn("S(y)", str(AXIOM_S_INJECTIVE))
         self.assertIn("Add(x, 0)", str(AXIOM_ADD_ZERO))
         self.assertIn("Add(x, S(y))", str(AXIOM_ADD_SUCCESSOR))
+        self.assertIn("Mul(x, 0)", str(AXIOM_MUL_ZERO))
+        self.assertIn("Mul(x, S(y))", str(AXIOM_MUL_SUCCESSOR))
 
     def test_inference_rules_are_declared(self):
         names = [rule.name for rule in INFERENCE_RULES]
@@ -69,6 +79,8 @@ class FormalWorldTests(unittest.TestCase):
         self.assertIn("MODUS_PONENS", names)
         self.assertIn("NEGATION_INTRO", names)
         self.assertIn("EQ_SUCC_CONGRUENCE", names)
+        self.assertIn("EQ_ADD_LEFT_CONGRUENCE", names)
+        self.assertIn("EQ_ADD_RIGHT_CONGRUENCE", names)
         self.assertIn("EQ_TRANSITIVITY", names)
         self.assertIn("INDUCTION", names)
 
@@ -141,6 +153,9 @@ class ProofEngineTests(unittest.TestCase):
                 "T5_ZERO_PLUS_X",
                 "T6_SUCC_ADD",
                 "T7_ADD_COMMUTATIVE",
+                "T8_ADD_ASSOCIATIVE",
+                "T9_ZERO_MUL_X",
+                "T10_MUL_ONE",
             ],
         )
         self.assertEqual(
@@ -182,6 +197,30 @@ class ProofEngineTests(unittest.TestCase):
                     Eq(Add(X, Y), Add(Y, X)),
                 ),
             ),
+        )
+        self.assertEqual(
+            state.theorems["T8_ADD_ASSOCIATIVE"].statement,
+            ForAll(
+                X,
+                ForAll(
+                    Z,
+                    ForAll(
+                        W,
+                        Eq(
+                            Add(Add(X, Z), W),
+                            Add(X, Add(Z, W)),
+                        ),
+                    ),
+                ),
+            ),
+        )
+        self.assertEqual(
+            state.theorems["T9_ZERO_MUL_X"].statement,
+            ForAll(Y, Eq(Mul(ZERO, Y), ZERO)),
+        )
+        self.assertEqual(
+            state.theorems["T10_MUL_ONE"].statement,
+            ForAll(X, Eq(Mul(X, ONE), X)),
         )
 
     def test_induction_theorem_depends_on_addition_axioms(self):
@@ -255,6 +294,44 @@ class ProofEngineTests(unittest.TestCase):
         self.assertIn("T5_ZERO_PLUS_X", dependencies)
         self.assertIn("T6_SUCC_ADD", dependencies)
 
+    def test_forall_elim_rejects_variable_capture(self):
+        nested = ForAll(X, ForAll(Y, Eq(X, Y)))
+        captured = ForAll(Y, Eq(Y, Y))
+        proof = Proof(
+            statement=captured,
+            steps=(
+                ProofStep(
+                    conclusion=nested,
+                    rule=RULE_ASSUMPTION,
+                ),
+                ProofStep(
+                    conclusion=captured,
+                    rule=RULE_FORALL_ELIM,
+                    premises=(0,),
+                    term=Y,
+                ),
+            ),
+        )
+
+        result = check_proof(proof)
+        self.assertFalse(result.valid)
+        self.assertIn("capture", " ".join(result.errors))
+
+    def test_associativity_depends_on_addition_axioms(self):
+        state = build_initial_knowledge()
+        dependencies = state.theorems["T8_ADD_ASSOCIATIVE"].dependencies
+
+        self.assertIn(AXIOM_ADD_ZERO.name, dependencies)
+        self.assertIn(AXIOM_ADD_SUCCESSOR.name, dependencies)
+
+    def test_mul_one_uses_multiplication_axioms_and_zero_plus(self):
+        state = build_initial_knowledge()
+        dependencies = state.theorems["T10_MUL_ONE"].dependencies
+
+        self.assertIn(AXIOM_MUL_ZERO.name, dependencies)
+        self.assertIn(AXIOM_MUL_SUCCESSOR.name, dependencies)
+        self.assertIn("T5_ZERO_PLUS_X", dependencies)
+
     def test_later_theorem_depends_on_earlier_theorem(self):
         state = build_initial_knowledge()
 
@@ -298,6 +375,15 @@ class SymbolicArithmeticTests(unittest.TestCase):
         self.assertEqual(result, five)
         self.assertEqual(len(trace), 4)
         self.assertEqual(trace[-1].rule, ADD_ZERO)
+
+    def test_two_times_three_normalizes_to_six_successors(self):
+        six = Succ(Succ(Succ(Succ(Succ(Succ(ZERO))))))
+        result, trace = normalize(Mul(TWO, THREE))
+
+        self.assertEqual(result, six)
+        self.assertGreater(len(trace), 0)
+        self.assertIn(MUL_SUCC, [step.rule for step in trace])
+        self.assertIn(MUL_ZERO, [step.rule for step in trace])
 
     def test_normal_form(self):
         result, trace = normalize(THREE)
