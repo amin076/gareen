@@ -42,6 +42,14 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Bootstrap Lake manifest
+        run: |
+          curl https://elan.lean-lang.org/elan-init.sh -sSf | sh -s -- -y
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+          "$HOME/.elan/bin/lake" update
+          echo "----- lake-manifest.json -----"
+          cat lake-manifest.json
+
       - name: Build and audit Lean project
         uses: leanprover/lean-action@v1
         with:
