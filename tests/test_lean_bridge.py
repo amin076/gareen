@@ -6,6 +6,7 @@ from lean_bridge import (
     render_batch_source,
     render_expr,
     render_formula,
+    render_proposition,
     render_theorem_source,
 )
 from math_world import (
@@ -42,6 +43,11 @@ class LeanBridgeTranslationTests(unittest.TestCase):
         self.assertIn("∀ (x : Nat)", rendered)
         self.assertIn("∀ (y : Nat)", rendered)
         self.assertIn("=", rendered)
+
+    def test_renders_raw_lean_number_theory_proposition(self):
+        statement = "∀ a b : Nat, Nat.gcd a b ∣ a"
+
+        self.assertEqual(render_proposition(statement), statement)
 
     def test_source_imports_mathlib(self):
         formula = ForAll(X, Eq(Add(ZERO, X), X))
