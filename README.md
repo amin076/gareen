@@ -6,6 +6,36 @@ Gareen is a research project for exploring whether a machine can grow useful for
 
 The original Python formal world from Phases 1–11 is retained as a transparent educational and research sandbox. It is valuable for experimentation, but new durable mathematical claims should be checked by Lean's kernel.
 
+## Phase 15 — Throughput and proof-soundness hardening
+
+The first 15-minute autonomous campaign exposed a clear bottleneck: Gareen
+could generate far more conjectures than the old bridge could send through
+Lean. Phase 15 changes the proving path rather than merely increasing the
+candidate count.
+
+Key changes:
+
+- batch many independent conjectures into shared Lean processes;
+- run tactic rounds only on candidates still unproved;
+- enforce a shared wall-clock budget for research campaigns;
+- distinguish `verified`, `unproved-in-budget`, and `not-attempted`;
+- diversify unary and bivariate candidate selection;
+- deprioritize statements already explained by Gareen's primitive rewrites;
+- record Lean process count and verification elapsed time;
+- harden the legacy induction checker against invalid dependency discharge.
+
+An unproved candidate is **not** treated as false. Only a kernel-checked Lean
+proof makes a durable theorem.
+
+The reproducible benchmark utility is:
+
+```bash
+python experiments/throughput_campaign.py --seconds 900
+```
+
+It uses false control statements, target-free pattern mining, a fixed wall-clock
+budget, and JSON/Markdown reporting.
+
 ## Phases 12–14 — Lean transformation
 
 ### Current architecture
