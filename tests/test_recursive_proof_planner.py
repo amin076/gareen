@@ -12,7 +12,7 @@ AUDIT = "'Gareen.GeneratedRecursive.goal' depends on axioms: [propext, Classical
 EVENTS = '\n'.join('GAREEN_EVENT ' + json.dumps(e) for e in [
     dict(id=1, parent=0, goal='P', rule='Nat.foo', status='try'),
     dict(id=2, parent=1, goal='P', rule='Nat.foo', status='backtrack'),
-    dict(id=3, parent=0, goal='P', rule='Nat.bar', status='accepted')])
+    dict(id=3, parent=0, goal='P', rule='dvd_add.mp', declaration='dvd_add', status='accepted')])
 
 class RecursivePlannerTests(unittest.TestCase):
     def test_admission_or_custom_axiom_never_passes(self):
@@ -43,9 +43,9 @@ class RecursivePlannerTests(unittest.TestCase):
                     subprocess.CompletedProcess([], 0, EVENTS + '\nGAREEN_NODES 7\n' + AUDIT, '')):
                 r = p.prove('True', theorem_name='goal')
             self.assertTrue(r.verified)
-            self.assertEqual(r.retrieved_constants, ('Nat.bar',))
+            self.assertEqual(r.retrieved_constants, ('dvd_add',))
             self.assertEqual(r.expanded_nodes, 7)
-            self.assertEqual(p._hints(), ('Nat.bar',))
+            self.assertEqual(p._hints(), ('dvd_add',))
             self.assertTrue(Path(r.attempts[0].source_path).with_suffix('.json').exists())
 
     def test_timeout_bytes_preserved_without_learning(self):

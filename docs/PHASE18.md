@@ -17,8 +17,11 @@ match theorem conclusions and create premises as metavariable goals, including
 implicit parameters and typeclass obligations. Both directions of indexed iff
 lemmas are supported.
 
-Applicable candidates are ranked by number of premises, a penalty for data
-witness goals, and prior successful use. A bounded ranked depth-first search
+Inductive constructors are retrieved generically from the target type.
+Applicable candidates are ranked by number of premises, preference for
+constructors, a penalty for non-shrinking printed subgoals and data witness
+goals, and prior successful use. Printed size is only a heuristic, not a
+termination argument. A bounded ranked depth-first search
 backtracks over the **whole remaining agenda**, restoring the complete
 metavariable context when a branch fails. This matters when sibling goals
 share an existential witness. This is not global best-first search. Ancestor
@@ -52,7 +55,7 @@ compile earlier discoveries into a growing imported Lean theorem library.
 lake build
 python -m unittest discover -s tests -v
 python recursive_proof_planner.py --statement '∀ a b : Nat, Nat.gcd a b ∣ a + b'
-python experiments/recursive_benchmark.py --seconds 1000 --per-goal 25 --baseline-limit 10
+python experiments/recursive_benchmark.py --seconds 1600 --per-goal 25 --baseline-limit 10
 ```
 
 The fixed ladder has 50 distinct positive goals in five workload groups:

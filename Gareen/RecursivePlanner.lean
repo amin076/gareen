@@ -21,6 +21,7 @@ structure Event where
   rule : String
   status : String
   children : Array String := #[]
+  declaration : String := ""
   deriving ToJson
 
 structure Stats where
@@ -38,12 +39,13 @@ structure Choice where
   goals : List MVarId
   state : MetavarContext
   score : Nat
+  declaration : String := ""
 
 private def emit (stats : IO.Ref Stats) (parent : Nat) (goal rule status : String)
-    (children : Array String := #[]) : MetaM Nat := do
+    (children : Array String := #[]) (declaration : String := "") : MetaM Nat := do
   let s ← stats.get
   let id := s.events.size + 1
-  stats.set { s with events := s.events.push { id, parent, goal, rule, status, children } }
+  stats.set { s with events := s.events.push { id, parent, goal, rule, status, children, declaration } }
   return id
 
 private def label (g : MVarId) : MetaM String := g.withContext do
@@ -108,7 +110,7 @@ private partial def search (cfg : Config) (stats : IO.Ref Stats)
               if !(← g.withContext (isProp (← g.getType))) then cost := cost + 100
             if cfg.preferred.contains name then cost := cost / 2
             let suffix := match mod with | .none => "" | .mp => ".mp" | .mpr => ".mpr"
-            choices := choices.push { rule := name.toString ++ suffix, goals := goals, state := (← getMCtx), score := cost }
+            choices := choices.push { rule := name.toString ++ suffix, goals := goals, state := (← getMCtx), score := cost, declaration := name.toString }
           catch _ => pure ()
           setMCtx base
       let ranked := choices.qsort fun a b =>
@@ -116,12 +118,12 @@ private partial def search (cfg : Config) (stats : IO.Ref Stats)
       for choice in ranked do
         setMCtx choice.state
         let children ← choice.goals.toArray.mapM label
-        let id ← emit stats task.parent text choice.rule "try" children
+        let id ← emit stats task.parent text choice.rule "try" children choice.declaration
         let next := choice.goals.map fun g =>
           { goal := g, depth := task.depth + 1, parent := id,
             ancestors := type :: task.ancestors : Task }
         if ← search cfg stats (next ++ rest) then
-          let _ ← emit stats id text choice.rule "accepted"
+          let _ ← emit stats id text choice.rule "accepted" #[] choice.declaration
           return true
         let _ ← emit stats id text choice.rule "backtrack"
         setMCtx base

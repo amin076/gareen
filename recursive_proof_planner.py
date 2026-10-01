@@ -90,7 +90,7 @@ class RecursiveProofPlanner(LeanProofPlanner):
         scores = {k: v for k, v in raw_scores.items()
                   if isinstance(k, str) and _NAME.fullmatch(k) and isinstance(v, int)}
         for name in result.retrieved_constants:
-            if '.' in name:
+            if _NAME.fullmatch(name):
                 scores[name] = scores.get(name, 0) + 1
         proofs = old.get('proofs', {})
         if not isinstance(proofs, dict): proofs = {}
@@ -135,8 +135,8 @@ class RecursiveProofPlanner(LeanProofPlanner):
         elapsed = time.monotonic() - start
         verified = audited(out + '\n' + err, rc)
         graph = parse_events(out)
-        constants = tuple(dict.fromkeys(e['rule'] for e in graph
-                          if e['status'] == 'accepted' and '.' in e['rule'])) if verified else ()
+        constants = tuple(dict.fromkeys(e['declaration'] for e in graph
+                          if e['status'] == 'accepted' and e.get('declaration'))) if verified else ()
         counts = re.findall(r'GAREEN_NODES (\d+)', out)
         attempt = PlannerAttempt('recursive_library_search', verified, rc, round(elapsed, 3),
                                  timed_out, str(path), (), constants, out, err)
