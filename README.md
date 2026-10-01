@@ -6,6 +6,61 @@ Gareen is a research project for exploring whether a machine can grow useful for
 
 The original Python formal world from Phases 1–11 is retained as a transparent educational and research sandbox. It is valuable for experimentation, but new durable mathematical claims should be checked by Lean's kernel.
 
+## Phase 16 — Mathematical research value + number-theory frontier
+
+Phase 15 proved that throughput alone is not enough: Gareen can verify many
+true identities, but most of them may be mathematically routine. Phase 16 adds
+an explicit research-value gate before expensive proving.
+
+A candidate is now filtered out of the research queue when:
+
+- it is only a ground numerical instance; such examples remain useful as
+  conjecture evidence;
+- both sides are explained entirely by primitive arithmetic rewrites;
+- it is reachable from already verified Gareen theorems in fewer than three
+  local theorem-rewrite steps;
+- or its combined research-value score is below the configured threshold.
+
+The score rewards:
+
+```text
+generality
++ compression of existing results
++ reuse potential across current open conjectures
++ structural richness
++ distance from already verified knowledge
+```
+
+The "three-step" rule is a **local derivation-distance heuristic**, not a claim
+about the globally shortest Lean proof. Lean tactics such as `omega` can hide
+many internal inference steps, so Gareen records this measure honestly as an
+estimate.
+
+Lean-backed research now starts with Gareen's verified T1–T14 knowledge rather
+than an empty theorem memory, so identities such as `x * 1 = x` are not
+rediscovered as research results.
+
+### Enlarged number-theory vocabulary
+
+The serious research layer now exposes canonical Mathlib concepts rather than
+reimplementing them:
+
+```text
+Divides    a ∣ b
+Quotient   n / d
+Remainder  n % d
+GCD        Nat.gcd a b
+Coprime    Nat.Coprime a b
+Prime      Nat.Prime p
+```
+
+`Gareen/NumberTheory.lean` provides stable Gareen names and kernel-checked
+sanity theorems. `number_theory_frontier.py` exposes the same concepts to the
+Python orchestration layer through general, Lean-native propositions.
+
+The legacy Python `{0,S,+,*}` world remains a sandbox; no custom division or
+prime axioms are introduced.
+
 ## Phase 15 — Throughput and proof-soundness hardening
 
 The first 15-minute autonomous campaign exposed a clear bottleneck: Gareen
