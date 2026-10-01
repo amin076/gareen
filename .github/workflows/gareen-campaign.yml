@@ -34,7 +34,7 @@ jobs:
 
       - name: Run 15-minute autonomous campaign
         run: |
-          python experiments/campaign_15m.py \
+          PYTHONPATH=. python experiments/campaign_15m.py \
             --seconds 900 \
             --max-size 9 \
             --per-size-cap 260 \
