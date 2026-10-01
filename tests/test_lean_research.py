@@ -1,7 +1,16 @@
 import unittest
 
-from lean_bridge import LeanVerificationResult
-from lean_research import LeanBackedResearcher, report_to_json
+from lean_bridge import (
+    LeanBatchItemResult,
+    LeanBatchVerificationResult,
+    LeanVerificationResult,
+)
+from lean_research import (
+    LeanBackedResearcher,
+    report_to_json,
+    select_research_conjectures,
+)
+from artificial_mathematician import generate_research_conjectures
 from math_world import KnowledgeState
 
 
@@ -18,7 +27,33 @@ class FakeLeanBridge:
             verified=self.verified,
             tactic="simp" if self.verified else None,
             attempts=(),
-            error="" if self.verified else "rejected",
+            error=(
+                ""
+                if self.verified
+                else "unproved within the current budget"
+            ),
+        )
+
+
+class FakeBatchBridge:
+    def __init__(self):
+        self.batch_calls = []
+
+    def verify_batch(self, candidates, *, batch_size):
+        self.batch_calls.append((tuple(candidates), batch_size))
+        results = tuple(
+            LeanBatchItemResult(
+                theorem_name=item.theorem_name,
+                statement=str(item.formula),
+                verified=True,
+                tactic="omega",
+            )
+            for item in candidates
+        )
+        return LeanBatchVerificationResult(
+            results=results,
+            process_invocations=2,
+            elapsed_seconds=0.25,
         )
 
 
@@ -34,10 +69,12 @@ class LeanBackedResearchTests(unittest.TestCase):
 
         self.assertGreater(report.generated_conjectures, 0)
         self.assertEqual(report.attempted_conjectures, 2)
-        self.assertEqual(report.verified_discoveries, 2)
+        self.assertEqual(report.verified_candidates, 2)
+        self.assertEqual(report.routine_verified, 2)
+        self.assertEqual(report.verified_discoveries, 0)
         self.assertEqual(len(bridge.calls), 2)
 
-    def test_rejected_candidate_is_not_a_discovery(self):
+    def test_unproved_candidate_is_not_a_discovery(self):
         bridge = FakeLeanBridge(verified=False)
         researcher = LeanBackedResearcher(
             bridge=bridge,
@@ -47,7 +84,39 @@ class LeanBackedResearchTests(unittest.TestCase):
         report = researcher.research(KnowledgeState())
 
         self.assertEqual(report.verified_discoveries, 0)
+        self.assertEqual(report.unproved_conjectures, 1)
         self.assertFalse(report.attempts[0].verified)
+        self.assertEqual(
+            report.attempts[0].status,
+            "unproved-in-budget",
+        )
+
+    def test_researcher_prefers_batch_backend_when_available(self):
+        bridge = FakeBatchBridge()
+        report = LeanBackedResearcher(
+            bridge=bridge,
+            max_attempts=4,
+            batch_size=32,
+        ).research(KnowledgeState())
+
+        self.assertEqual(len(bridge.batch_calls), 1)
+        self.assertEqual(report.attempted_conjectures, 4)
+        self.assertEqual(report.verified_candidates, 4)
+        self.assertEqual(report.routine_verified, 0)
+        self.assertEqual(report.verified_discoveries, 4)
+        self.assertEqual(report.process_invocations, 2)
+        self.assertEqual(report.verification_elapsed_seconds, 0.25)
+
+    def test_selection_does_not_starve_bivariate_conjectures(self):
+        conjectures = generate_research_conjectures(KnowledgeState())
+        selected = select_research_conjectures(
+            conjectures,
+            limit=4,
+        )
+
+        arities = [len(item.variables) for item in selected]
+        self.assertIn(1, arities)
+        self.assertIn(2, arities)
 
     def test_report_is_json_serializable_shape(self):
         bridge = FakeLeanBridge(verified=True)
@@ -59,8 +128,11 @@ class LeanBackedResearchTests(unittest.TestCase):
         payload = report_to_json(report)
 
         self.assertEqual(payload["attempted_conjectures"], 1)
-        self.assertEqual(payload["verified_discoveries"], 1)
-        self.assertEqual(len(payload["discoveries"]), 1)
+        self.assertEqual(payload["verified_candidates"], 1)
+        self.assertEqual(payload["routine_verified"], 1)
+        self.assertEqual(payload["verified_discoveries"], 0)
+        self.assertEqual(payload["unproved_conjectures"], 0)
+        self.assertEqual(len(payload["discoveries"]), 0)
 
 
 if __name__ == "__main__":

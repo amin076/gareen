@@ -1,0 +1,64 @@
+name: Gareen Phase 15 throughput benchmark
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "experiments/throughput_campaign.py"
+      - ".github/workflows/gareen-throughput-benchmark.yml"
+      - "lean_bridge.py"
+      - "lean_research.py"
+      - "math_world.py"
+
+jobs:
+  throughput-benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up Lean and Mathlib cache
+        uses: leanprover/lean-action@v1
+        with:
+          auto-config: false
+          build: true
+          test: false
+          use-mathlib-cache: true
+          axiom-audit: true
+
+      - name: Run 15-minute high-throughput campaign
+        run: |
+          PYTHONPATH=. python experiments/throughput_campaign.py \
+            --seconds 900 \
+            --max-size 9 \
+            --per-size-cap 260 \
+            --samples 6 \
+            --max-candidates 20000 \
+            --pairs-per-class 80 \
+            --batch-size 96 \
+            --json-out .gareen/campaign-15m-v2.json \
+            --markdown-out .gareen/campaign-15m-v2.md
+
+      - name: Print campaign report
+        if: always()
+        run: |
+          if [ -f .gareen/campaign-15m-v2.md ]; then
+            cat .gareen/campaign-15m-v2.md
+          fi
+
+      - name: Upload campaign artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gareen-phase15-throughput
+          path: |
+            .gareen/campaign-15m-v2.json
+            .gareen/campaign-15m-v2.md
+          if-no-files-found: warn

@@ -1,6 +1,9 @@
 import unittest
 
 from lean_bridge import (
+    LeanBatchCandidate,
+    _failed_names_from_diagnostics,
+    render_batch_source,
     render_expr,
     render_formula,
     render_theorem_source,
@@ -51,6 +54,50 @@ class LeanBridgeTranslationTests(unittest.TestCase):
         self.assertIn("import Mathlib", source)
         self.assertIn("theorem zero_add_candidate", source)
         self.assertIn("omega", source)
+
+    def test_batch_source_tracks_candidate_line_ranges(self):
+        candidates = (
+            LeanBatchCandidate(
+                theorem_name="first_candidate",
+                formula=ForAll(X, Eq(Add(ZERO, X), X)),
+            ),
+            LeanBatchCandidate(
+                theorem_name="second_candidate",
+                formula=ForAll(X, Eq(X, X)),
+            ),
+        )
+
+        source, ranges = render_batch_source(candidates, tactic="simp")
+
+        self.assertIn("theorem first_candidate", source)
+        self.assertIn("theorem second_candidate", source)
+        self.assertEqual(set(ranges), {"first_candidate", "second_candidate"})
+        self.assertLess(ranges["first_candidate"][0], ranges["second_candidate"][0])
+
+    def test_batch_diagnostics_map_only_failed_candidate(self):
+        candidates = (
+            LeanBatchCandidate(
+                theorem_name="first_candidate",
+                formula=ForAll(X, Eq(Add(ZERO, X), X)),
+            ),
+            LeanBatchCandidate(
+                theorem_name="second_candidate",
+                formula=ForAll(X, Eq(X, X)),
+            ),
+        )
+        _, ranges = render_batch_source(candidates, tactic="simp")
+        failed_line = ranges["second_candidate"][1]
+        diagnostics = (
+            f"/tmp/batch.lean:{failed_line}:3: error: tactic failed\n"
+        )
+
+        failed, unmapped = _failed_names_from_diagnostics(
+            diagnostics,
+            ranges,
+        )
+
+        self.assertEqual(failed, frozenset({"second_candidate"}))
+        self.assertFalse(unmapped)
 
     def test_rejects_unsafe_theorem_identifier(self):
         formula = ForAll(X, Eq(X, X))

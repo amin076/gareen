@@ -25,6 +25,8 @@ from math_world import (
     RULE_EQ_ADD_RIGHT_CONGRUENCE,
     RULE_EQ_MUL_LEFT_CONGRUENCE,
     RULE_EQ_MUL_RIGHT_CONGRUENCE,
+    RULE_EQ_SYMMETRY,
+    RULE_EQ_TRANSITIVITY,
     THREE,
     TWO,
     Add,
@@ -329,6 +331,83 @@ class ProofEngineTests(unittest.TestCase):
         result = check_proof(proof)
         self.assertFalse(result.valid)
         self.assertIn("base case", " ".join(result.errors))
+
+    def test_induction_base_cannot_depend_on_induction_hypothesis(self):
+        predicate = Eq(Add(ZERO, ZERO), ZERO)
+        proof = Proof(
+            statement=ForAll(X, predicate),
+            steps=(
+                ProofStep(
+                    conclusion=predicate,
+                    rule=RULE_ASSUMPTION,
+                ),
+                ProofStep(
+                    conclusion=AXIOM_ADD_ZERO.formula,
+                    rule=RULE_AXIOM,
+                    source=AXIOM_ADD_ZERO.name,
+                ),
+                ProofStep(
+                    conclusion=predicate,
+                    rule=RULE_FORALL_ELIM,
+                    premises=(1,),
+                    term=ZERO,
+                ),
+                ProofStep(
+                    conclusion=ForAll(X, predicate),
+                    rule=RULE_INDUCTION,
+                    premises=(0, 2),
+                    variable=X,
+                    discharge=0,
+                ),
+            ),
+        )
+
+        result = check_proof(proof)
+        self.assertFalse(result.valid)
+        joined = " ".join(result.errors)
+        self.assertIn("base case may not depend", joined)
+        self.assertIn("step must depend", joined)
+
+    def test_induction_rejects_remaining_assumption_with_free_variable(self):
+        extra_assumption = Eq(ZERO, X)
+        predicate = Eq(ZERO, ZERO)
+        proof = Proof(
+            statement=ForAll(X, predicate),
+            steps=(
+                ProofStep(
+                    conclusion=extra_assumption,
+                    rule=RULE_ASSUMPTION,
+                ),
+                ProofStep(
+                    conclusion=Eq(X, ZERO),
+                    rule=RULE_EQ_SYMMETRY,
+                    premises=(0,),
+                ),
+                ProofStep(
+                    conclusion=predicate,
+                    rule=RULE_EQ_TRANSITIVITY,
+                    premises=(0, 1),
+                ),
+                ProofStep(
+                    conclusion=predicate,
+                    rule=RULE_ASSUMPTION,
+                ),
+                ProofStep(
+                    conclusion=ForAll(X, predicate),
+                    rule=RULE_INDUCTION,
+                    premises=(2, 3),
+                    variable=X,
+                    discharge=3,
+                ),
+            ),
+        )
+
+        result = check_proof(proof)
+        self.assertFalse(result.valid)
+        self.assertIn(
+            "induction variable is free in remaining open assumption",
+            " ".join(result.errors),
+        )
 
     def test_invalid_forall_intro_from_open_assumption_is_rejected(self):
         assumption = Eq(X, ZERO)
