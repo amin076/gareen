@@ -57,6 +57,44 @@ class FakeBatchBridge:
         )
 
 
+class FakeTacticAwareBatchBridge:
+    def __init__(self):
+        self.calls = []
+
+    def verify_batch(self, candidates, *, tactics, batch_size):
+        candidates = tuple(candidates)
+        tactics = tuple(tactics)
+        self.calls.append((candidates, tactics, batch_size))
+
+        if tactics == ("simp", "norm_num"):
+            results = tuple(
+                LeanBatchItemResult(
+                    theorem_name=item.theorem_name,
+                    statement=str(item.formula),
+                    verified=(index == 0),
+                    tactic="simp" if index == 0 else None,
+                    error="" if index == 0 else "routine gate did not solve",
+                )
+                for index, item in enumerate(candidates)
+            )
+        else:
+            results = tuple(
+                LeanBatchItemResult(
+                    theorem_name=item.theorem_name,
+                    statement=str(item.formula),
+                    verified=True,
+                    tactic="omega",
+                )
+                for item in candidates
+            )
+
+        return LeanBatchVerificationResult(
+            results=results,
+            process_invocations=1,
+            elapsed_seconds=0.1,
+        )
+
+
 class LeanBackedResearchTests(unittest.TestCase):
     def test_researcher_sends_generated_conjectures_to_lean_backend(self):
         bridge = FakeLeanBridge(verified=True)
@@ -106,6 +144,22 @@ class LeanBackedResearchTests(unittest.TestCase):
         self.assertEqual(report.verified_discoveries, 4)
         self.assertEqual(report.process_invocations, 2)
         self.assertEqual(report.verification_elapsed_seconds, 0.25)
+
+    def test_routine_gate_avoids_strong_prover_for_easy_candidate(self):
+        bridge = FakeTacticAwareBatchBridge()
+        report = LeanBackedResearcher(
+            bridge=bridge,
+            max_attempts=2,
+            batch_size=32,
+        ).research(KnowledgeState())
+
+        self.assertEqual(len(bridge.calls), 2)
+        self.assertEqual(bridge.calls[0][1], ("simp", "norm_num"))
+        self.assertEqual(bridge.calls[1][1], ("omega", "ring", "nlinarith", "aesop"))
+        self.assertEqual(len(bridge.calls[1][0]), 1)
+        self.assertEqual(report.verified_candidates, 2)
+        self.assertEqual(report.routine_verified, 1)
+        self.assertEqual(report.verified_discoveries, 1)
 
     def test_selection_does_not_starve_bivariate_conjectures(self):
         conjectures = generate_research_conjectures(KnowledgeState())
