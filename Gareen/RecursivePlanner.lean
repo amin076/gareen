@@ -63,6 +63,9 @@ private partial def search (cfg : Config) (stats : IO.Ref Stats)
     goal.withContext do
       let type ← instantiateMVars (← goal.getType)
       let text ← label goal
+      if task.depth > cfg.maxDepth then
+        let _ ← emit stats task.parent text "" "depth-limit"
+        return false
       if task.ancestors.contains type then
         let _ ← emit stats task.parent text "" "cycle"
         return false
@@ -127,11 +130,11 @@ elab_rules : tactic
     let cfg : Config := { maxDepth := depth.getNat, maxNodes := nodes.getNat, maxCandidates := width.getNat, preferred := preferred }
     let success ← search cfg stats [{ goal := goal, depth := 0, parent := 0 }]
     let data ← stats.get
+    if !success then before.restore
     for event in data.events do
       logInfo m!"GAREEN_EVENT {toJson event |>.compress}"
     logInfo m!"GAREEN_NODES {data.nodes}"
     if !success then
-      before.restore
       throwError "Gareen bounded recursive search exhausted; goal is unproved, not false"
     let proof ← instantiateMVars (mkMVar goal)
     if proof.hasMVar || proof.hasSorry then

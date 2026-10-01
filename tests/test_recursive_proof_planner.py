@@ -17,6 +17,7 @@ EVENTS = '\n'.join('GAREEN_EVENT ' + json.dumps(e) for e in [
 class RecursivePlannerTests(unittest.TestCase):
     def test_admission_or_custom_axiom_never_passes(self):
         self.assertTrue(audited(AUDIT, 0))
+        self.assertTrue(audited("goal does not depend on any axioms", 0))
         self.assertFalse(audited(AUDIT, 1))
         self.assertFalse(audited('', 0))
         self.assertFalse(audited(AUDIT.replace('propext', 'sorryAx'), 0))

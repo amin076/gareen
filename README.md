@@ -6,6 +6,23 @@ Gareen is a research project for exploring whether a machine can grow useful for
 
 The original Python formal world from Phases 1–11 is retained as a transparent educational and research sandbox. It is valuable for experimentation, but new durable mathematical claims should be checked by Lean's kernel.
 
+## Phase 18 — Recursive theorem-retrieval planner
+
+The number-theory proof path now uses bounded recursive backward search.
+Lean's indexed library lookup retrieves applicable theorems; their premises
+become subgoals, and ranked alternatives are explored with full backtracking.
+There are no domain-specific decomposition templates in this new planner.
+
+The planner records its proof graph, failed branches, resource use and checked
+proof source. Successful theorem use improves persistent ranking hints; every
+new result is still independently elaborated and axiom-audited by Lean.
+
+A fixed 50-goal ladder includes the original gcd target, nested arithmetic
+composition, propositions, and harder number-theory goals. Phase 17 remains
+available for paired baseline runs. See [Phase 18 design, limitations and
+reproduction](docs/PHASE18.md). Recursive lemma invention and general induction
+planning remain future work.
+
 ## Phase 17 — Mathlib theorem retrieval + multi-step proof planning
 
 Phase 16 exposed the next bottleneck: Gareen knew the vocabulary for gcd and

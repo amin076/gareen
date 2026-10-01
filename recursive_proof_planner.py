@@ -44,6 +44,8 @@ def parse_events(output: str) -> tuple[dict, ...]:
 
 def audited(output: str, returncode: int) -> bool:
     matches = _AXIOMS.findall(output)
+    if 'does not depend on any axioms' in output:
+        matches.append('')
     if returncode != 0 or len(matches) != 1 or 'declaration uses' in output:
         return False
     axioms = {a.strip() for a in matches[0].split(',') if a.strip()}
@@ -83,12 +85,15 @@ class RecursiveProofPlanner(LeanProofPlanner):
             if not isinstance(old, dict): old = {}
         except (OSError, ValueError):
             old = {}
-        scores = {k: v for k, v in old.get('lemmas', {}).items()
+        raw_scores = old.get('lemmas', {})
+        if not isinstance(raw_scores, dict): raw_scores = {}
+        scores = {k: v for k, v in raw_scores.items()
                   if isinstance(k, str) and _NAME.fullmatch(k) and isinstance(v, int)}
         for name in result.retrieved_constants:
             if '.' in name:
                 scores[name] = scores.get(name, 0) + 1
         proofs = old.get('proofs', {})
+        if not isinstance(proofs, dict): proofs = {}
         key = hashlib.sha256(result.statement.encode()).hexdigest()
         proofs[key] = {'statement': result.statement, 'source_path': result.attempts[0].source_path,
                        'constants': list(result.retrieved_constants)}
