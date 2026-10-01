@@ -23,8 +23,13 @@ from dataclasses import asdict, dataclass
 from hashlib import sha256
 import json
 from pathlib import Path
+import sys
 import time
 from typing import Iterable
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 from lean_bridge import LeanBridge
 from math_world import (
