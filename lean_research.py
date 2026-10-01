@@ -22,7 +22,7 @@ from lean_bridge import (
     LeanBridge,
     LeanVerificationResult,
 )
-from math_world import Formula, KnowledgeState, normalize
+from math_world import Formula, KnowledgeState, build_initial_knowledge, normalize
 from research_value import (
     ResearchValueAssessment,
     assess_research_value,
@@ -237,7 +237,7 @@ class LeanBackedResearcher:
         self,
         state: Optional[KnowledgeState] = None,
     ) -> LeanResearchReport:
-        research_state = state or KnowledgeState()
+        research_state = state or build_initial_knowledge()
         conjectures = generate_research_conjectures(research_state)
         ranked = rank_research_conjectures(
             conjectures,
@@ -411,7 +411,7 @@ def main() -> int:
         min_reasoning_steps=max(1, args.min_reasoning_steps),
         min_research_value=max(0, args.min_research_value),
     )
-    report = researcher.research(KnowledgeState())
+    report = researcher.research(build_initial_knowledge())
 
     print("Gareen Lean-backed research")
     print("===========================")
