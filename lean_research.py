@@ -88,11 +88,26 @@ def _direct_rewrite_equivalent(item: ResearchConjecture) -> bool:
     return left == right
 
 
-def _proof_class(tactic: Optional[str]) -> str:
+def _proof_class(
+    tactic: Optional[str],
+    conjecture: Optional[ResearchConjecture] = None,
+) -> str:
     if tactic in {"simp", "norm_num"}:
         return "routine-simplification"
     if tactic is None:
         return "unproved"
+
+    # The legacy Gareen grammar contains only elementary Nat identities over
+    # 0, successor, addition and multiplication. A one-variable identity in
+    # that tiny language should not become a "research discovery" merely
+    # because omega/ring needed more automation than simp.
+    if (
+        conjecture is not None
+        and len(conjecture.variables) <= 1
+        and tactic in {"omega", "ring", "nlinarith"}
+    ):
+        return "routine-elementary-arithmetic"
+
     return "solver-verified"
 
 
@@ -328,10 +343,10 @@ class LeanBackedResearcher:
             name = f"lean_auto_{index:04d}"
             verified, tactic, error = outcomes[name]
             assessment = assessment_by_statement[str(conjecture.statement)]
-            proof_class = _proof_class(tactic)
+            proof_class = _proof_class(tactic, conjecture)
             status = (
                 "verified-routine"
-                if verified and proof_class == "routine-simplification"
+                if verified and proof_class.startswith("routine-")
                 else "verified"
                 if verified
                 else "unproved-in-budget"
@@ -360,7 +375,7 @@ class LeanBackedResearcher:
             if (
                 verified
                 and tactic is not None
-                and proof_class != "routine-simplification"
+                and not proof_class.startswith("routine-")
             ):
                 from lean_bridge import render_formula
 
