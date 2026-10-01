@@ -85,7 +85,12 @@ private partial def search (cfg : Config) (stats : IO.Ref Stats)
       catch _ => pure ()
       setMCtx base
       if task.depth < cfg.maxDepth then
-        let candidates ← LibrarySearch.libSearchFindDecls type
+        let indexed ← LibrarySearch.libSearchFindDecls type
+        -- Constructors are a generic source of introductions, including witnesses.
+        let constructors : Array (Name × LibrarySearch.DeclMod) := match (← getEnv).find? (type.getAppFn.constName?.getD .anonymous) with
+          | some (.inductInfo info) => info.ctors.toArray.map (fun n => (n, .none))
+          | _ => #[]
+        let candidates := constructors ++ indexed
         let candidates := candidates.filter (fun c => cfg.preferred.contains c.1) ++
           candidates.filter (fun c => !cfg.preferred.contains c.1)
         for (name, mod) in candidates.toList.take cfg.maxCandidates do
@@ -95,6 +100,10 @@ private partial def search (cfg : Config) (stats : IO.Ref Stats)
             let lemmaExpr ← LibrarySearch.mkLibrarySearchLemma name mod
             let goals ← goal.apply lemmaExpr
             let mut cost := goals.length * 10
+            if !goals.isEmpty then
+              let largest ← goals.foldlM (fun n g => do return max n (← label g).length) 0
+              if largest >= text.length then cost := cost + 200
+            if constructors.any (fun c => c.1 == name) then cost := 5
             for g in goals do
               if !(← g.withContext (isProp (← g.getType))) then cost := cost + 100
             if cfg.preferred.contains name then cost := cost / 2
