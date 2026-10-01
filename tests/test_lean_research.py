@@ -46,7 +46,7 @@ class FakeBatchBridge:
                 theorem_name=item.theorem_name,
                 statement=str(item.formula),
                 verified=True,
-                tactic="omega",
+                tactic="aesop",
             )
             for item in candidates
         )
