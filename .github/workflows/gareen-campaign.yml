@@ -1,0 +1,62 @@
+name: Gareen 15-minute campaign
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "experiments/campaign_15m.py"
+      - ".github/workflows/gareen-campaign.yml"
+      - "lean_bridge.py"
+      - "math_world.py"
+
+jobs:
+  autonomous-campaign:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up Lean and Mathlib cache
+        uses: leanprover/lean-action@v1
+        with:
+          auto-config: false
+          build: true
+          test: false
+          use-mathlib-cache: true
+          axiom-audit: true
+
+      - name: Run 15-minute autonomous campaign
+        run: |
+          python experiments/campaign_15m.py \
+            --seconds 900 \
+            --max-size 9 \
+            --per-size-cap 260 \
+            --samples 6 \
+            --max-candidates 20000 \
+            --pairs-per-class 80 \
+            --json-out .gareen/campaign-15m.json \
+            --markdown-out .gareen/campaign-15m.md
+
+      - name: Print campaign report
+        if: always()
+        run: |
+          if [ -f .gareen/campaign-15m.md ]; then
+            cat .gareen/campaign-15m.md
+          fi
+
+      - name: Upload campaign artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gareen-15m-campaign
+          path: |
+            .gareen/campaign-15m.json
+            .gareen/campaign-15m.md
+          if-no-files-found: warn
