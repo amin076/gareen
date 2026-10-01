@@ -3,6 +3,12 @@
 from __future__ import annotations
 
 from collections import Counter
+from pathlib import Path
+import sys
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 from artificial_mathematician import generate_research_conjectures
 from math_world import build_initial_knowledge
