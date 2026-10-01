@@ -56,8 +56,10 @@ class ProofPlannerStructureTests(unittest.TestCase):
 
     def test_extracts_mathlib_suggestions_and_constants(self):
         stdout = (
-            "info: Try this: exact Nat.gcd_dvd_left a b\n"
-            "info: Try this: exact (Nat.dvd_add_right gareen_left).2 "
+            "Try this:\n"
+            "  [apply] exact Nat.gcd_dvd_left a b\n"
+            "Try this:\n"
+            "  [apply] exact (Nat.dvd_add_iff_right gareen_left).mp "
             "gareen_right\n"
         )
         suggestions = _extract_suggestions(stdout, "")
@@ -65,7 +67,7 @@ class ProofPlannerStructureTests(unittest.TestCase):
 
         self.assertIn("exact Nat.gcd_dvd_left a b", suggestions)
         self.assertIn("Nat.gcd_dvd_left", constants)
-        self.assertIn("Nat.dvd_add_right", constants)
+        self.assertIn("Nat.dvd_add_iff_right", constants)
 
 
 if __name__ == "__main__":
