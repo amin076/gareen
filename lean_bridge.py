@@ -83,7 +83,7 @@ class LeanVerificationResult:
 @dataclass(frozen=True)
 class LeanBatchCandidate:
     theorem_name: str
-    formula: Formula
+    formula: Formula | str
 
 
 @dataclass(frozen=True)
@@ -157,8 +157,17 @@ def render_formula(formula: Formula) -> str:
     raise TypeError(f"Unsupported Gareen formula: {type(formula)!r}")
 
 
+def render_proposition(formula: Formula | str) -> str:
+    if isinstance(formula, str):
+        statement = formula.strip()
+        if not statement:
+            raise ValueError("Lean proposition string cannot be empty")
+        return statement
+    return render_formula(formula)
+
+
 def render_theorem_source(
-    formula: Formula,
+    formula: Formula | str,
     *,
     theorem_name: str,
     tactic: str,
@@ -171,7 +180,7 @@ def render_theorem_source(
 
 namespace Gareen.Generated
 
-theorem {theorem_name} : {render_formula(formula)} := by
+theorem {theorem_name} : {render_proposition(formula)} := by
   {_TACTIC_SCRIPTS[tactic]}
 
 end Gareen.Generated
@@ -208,7 +217,7 @@ def render_batch_source(
     for item in candidates:
         name = _identifier(item.theorem_name)
         start_line = len(lines) + 1
-        lines.append(f"theorem {name} : {render_formula(item.formula)} := by")
+        lines.append(f"theorem {name} : {render_proposition(item.formula)} := by")
         lines.append(f"  {_TACTIC_SCRIPTS[tactic]}")
         end_line = len(lines)
         ranges[name] = (start_line, end_line)
@@ -415,7 +424,7 @@ class LeanBridge:
             unavailable = tuple(
                 LeanBatchItemResult(
                     theorem_name=item.theorem_name,
-                    statement=render_formula(item.formula),
+                    statement=render_proposition(item.formula),
                     verified=False,
                     tactic=None,
                     attempted=False,
@@ -525,7 +534,7 @@ class LeanBridge:
                     item = pending[name]
                     resolved[name] = LeanBatchItemResult(
                         theorem_name=name,
-                        statement=render_formula(item.formula),
+                        statement=render_proposition(item.formula),
                         verified=True,
                         tactic=tactic,
                     )
@@ -540,7 +549,7 @@ class LeanBridge:
             for name, item in pending.items():
                 resolved[name] = LeanBatchItemResult(
                     theorem_name=name,
-                    statement=render_formula(item.formula),
+                    statement=render_proposition(item.formula),
                     verified=False,
                     tactic=None,
                     attempted=name in attempted_names,
