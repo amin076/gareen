@@ -235,7 +235,7 @@ def _extract_suggestions(stdout: str, stderr: str) -> tuple[str, ...]:
                     continue
                 # Lean 4.34 currently prefixes exact? suggestions with
                 # annotations such as `[apply]`.
-                candidate = re.sub(r"^\\[[^]]+\\]\\s*", "", candidate)
+                candidate = re.sub(r"^\[[^]]+\]\s*", "", candidate)
                 suggestion = candidate
                 break
 
