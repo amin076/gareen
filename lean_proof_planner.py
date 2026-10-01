@@ -215,14 +215,33 @@ def _render_source(theorem_name: str, statement: str, proof_lines: tuple[str, ..
 
 
 def _extract_suggestions(stdout: str, stderr: str) -> tuple[str, ...]:
+    """Extract both one-line and current multiline Lean `Try this` messages."""
+
     suggestions: list[str] = []
-    for line in (stdout + "\n" + stderr).splitlines():
-        match = _TRY_THIS_RE.search(line)
-        if match is None:
+    lines = (stdout + "\n" + stderr).splitlines()
+
+    for index, line in enumerate(lines):
+        if "Try this:" not in line:
             continue
-        suggestion = match.group(1).strip()
-        if suggestion not in suggestions:
+
+        tail = line.split("Try this:", 1)[1].strip()
+        if tail:
+            suggestion = tail
+        else:
+            suggestion = ""
+            for following in lines[index + 1 :]:
+                candidate = following.strip()
+                if not candidate:
+                    continue
+                # Lean 4.34 currently prefixes exact? suggestions with
+                # annotations such as `[apply]`.
+                candidate = re.sub(r"^\\[[^]]+\\]\\s*", "", candidate)
+                suggestion = candidate
+                break
+
+        if suggestion and suggestion not in suggestions:
             suggestions.append(suggestion)
+
     return tuple(suggestions)
 
 
