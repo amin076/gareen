@@ -38,7 +38,10 @@ from typing import Optional
 
 _SAFE_IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_']*$")
 _TRY_THIS_RE = re.compile(r"Try this:\s*(.+)")
-_IDENT_RE = re.compile(r"(?:exact|apply)\s+([A-Za-z_][A-Za-z0-9_'.]*)")
+_IDENT_RE = re.compile(r"(?:exact|apply)\s+\(?([A-Za-z_][A-Za-z0-9_'.]*)")
+_QUALIFIED_CONST_RE = re.compile(
+    r"\b(?:[A-Za-z_][A-Za-z0-9_']*\.)+[A-Za-z_][A-Za-z0-9_']*\b"
+)
 
 
 @dataclass(frozen=True)
