@@ -60,4 +60,7 @@ jobs:
         run: python lean_bridge.py --ci-demo
 
       - name: Run Lean-backed research demo
-        run: python lean_research.py --limit 2 --json-out .gareen/lean-research-ci.json
+        run: python lean_research.py --limit 6 --json-out .gareen/lean-research-ci.json
+
+      - name: Run number theory frontier smoke test
+        run: python number_theory_frontier.py
