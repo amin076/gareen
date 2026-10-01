@@ -41,19 +41,24 @@ from math_world import (
 
 _SAFE_IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_']*$")
 _LEAN_ERROR_RE = re.compile(r":(?P<line>\d+):(?P<column>\d+):\s+error:")
-_ALLOWED_TACTICS = (
-    "simp",
-    "omega",
-    "ring",
-    "norm_num",
-    "nlinarith",
-    "aesop",
-)
+_TACTIC_SCRIPTS = {
+    "simp": "simp",
+    "omega": "omega",
+    "ring": "ring",
+    "norm_num": "norm_num",
+    "nlinarith": "nlinarith",
+    "aesop": "aesop",
+    "simp_ring": "simp [Nat.succ_eq_add_one] <;> ring",
+    "simp_nlinarith": "simp [Nat.succ_eq_add_one] <;> nlinarith",
+}
+_ALLOWED_TACTICS = tuple(_TACTIC_SCRIPTS)
 _BATCH_TACTICS = (
     "simp",
     "omega",
+    "simp_ring",
     "ring",
     "norm_num",
+    "simp_nlinarith",
     "nlinarith",
 )
 
@@ -169,7 +174,7 @@ def render_theorem_source(
 namespace Gareen.Generated
 
 theorem {theorem_name} : {render_formula(formula)} := by
-  {tactic}
+  {_TACTIC_SCRIPTS[tactic]}
 
 end Gareen.Generated
 """
@@ -206,7 +211,7 @@ def render_batch_source(
         name = _identifier(item.theorem_name)
         start_line = len(lines) + 1
         lines.append(f"theorem {name} : {render_formula(item.formula)} := by")
-        lines.append(f"  {tactic}")
+        lines.append(f"  {_TACTIC_SCRIPTS[tactic]}")
         end_line = len(lines)
         ranges[name] = (start_line, end_line)
         lines.append("")
