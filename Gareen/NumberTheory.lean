@@ -63,6 +63,9 @@ theorem coprime_iff_gcd_one (a b : Nat) :
 theorem prime_has_only_trivial_divisors {p d : Nat}
     (hp : IsPrime p) (hd : Divides d p) :
     d = 1 ∨ d = p := by
-  exact (hp.eq_one_or_self_of_dvd d hd)
+  by_cases h : d = 1
+  · exact Or.inl h
+  · right
+    exact ((hp.dvd_iff_eq h).mp hd).symm
 
 end Gareen
