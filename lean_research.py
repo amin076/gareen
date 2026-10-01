@@ -22,7 +22,7 @@ from lean_bridge import (
     LeanBridge,
     LeanVerificationResult,
 )
-from math_world import Formula, KnowledgeState
+from math_world import Formula, KnowledgeState, normalize
 
 
 @dataclass(frozen=True)
@@ -45,6 +45,7 @@ class LeanResearchAttempt:
     error: str
     heuristic_score: int
     variable_count: int
+    direct_rewrite_equivalent: bool
 
 
 @dataclass(frozen=True)
@@ -60,13 +61,25 @@ class LeanResearchReport:
     discoveries: tuple[LeanVerifiedDiscovery, ...]
 
 
-def _conjecture_priority(item: ResearchConjecture) -> tuple[int, int, int, str]:
-    """Prefer structurally richer conjectures without starving simple ones."""
+def _direct_rewrite_equivalent(item: ResearchConjecture) -> bool:
+    """Detect conjectures already explained by Gareen's primitive rewrites."""
+
+    try:
+        left, _ = normalize(item.body.left, max_steps=500)
+        right, _ = normalize(item.body.right, max_steps=500)
+    except RuntimeError:
+        return False
+    return left == right
+
+
+def _conjecture_priority(item: ResearchConjecture) -> tuple[int, int, int, int, str]:
+    """Prefer nontrivial, multi-variable, structurally richer conjectures."""
 
     return (
+        1 if _direct_rewrite_equivalent(item) else 0,
+        -len(item.variables),
         -item.heuristic_score,
         -len(str(item.statement)),
-        -len(item.variables),
         str(item.statement),
     )
 
@@ -212,6 +225,9 @@ class LeanBackedResearcher:
                     error=error,
                     heuristic_score=conjecture.heuristic_score,
                     variable_count=len(conjecture.variables),
+                    direct_rewrite_equivalent=_direct_rewrite_equivalent(
+                        conjecture
+                    ),
                 )
             )
 
@@ -263,6 +279,7 @@ def report_to_json(report: LeanResearchReport) -> dict:
                 "error": attempt.error,
                 "heuristic_score": attempt.heuristic_score,
                 "variable_count": attempt.variable_count,
+                "direct_rewrite_equivalent": attempt.direct_rewrite_equivalent,
             }
             for attempt in report.attempts
         ],
