@@ -89,6 +89,7 @@ class LeanBatchItemResult:
     statement: str
     verified: bool
     tactic: Optional[str]
+    attempted: bool = True
     error: str = ""
 
 
@@ -104,7 +105,15 @@ class LeanBatchVerificationResult:
 
     @property
     def unproved_count(self) -> int:
-        return sum(1 for item in self.results if not item.verified)
+        return sum(
+            1
+            for item in self.results
+            if item.attempted and not item.verified
+        )
+
+    @property
+    def attempted_count(self) -> int:
+        return sum(1 for item in self.results if item.attempted)
 
 
 def _identifier(name: str) -> str:
@@ -406,6 +415,7 @@ class LeanBridge:
                     statement=render_formula(item.formula),
                     verified=False,
                     tactic=None,
+                    attempted=False,
                     error="Lean/Lake is not installed or not on PATH.",
                 )
                 for item in ordered
@@ -424,6 +434,7 @@ class LeanBridge:
         )
         self.generated_dir.mkdir(parents=True, exist_ok=True)
         resolved: dict[str, LeanBatchItemResult] = {}
+        attempted_names: set[str] = set()
         process_invocations = 0
 
         for chunk_index in range(0, len(ordered), batch_size):
@@ -486,6 +497,7 @@ class LeanBridge:
                     source_path.unlink(missing_ok=True)
 
                 process_invocations += 1
+                attempted_names.update(pending)
 
                 if returncode == 0:
                     successful_names = set(pending)
@@ -528,10 +540,18 @@ class LeanBridge:
                     statement=render_formula(item.formula),
                     verified=False,
                     tactic=None,
+                    attempted=name in attempted_names,
                     error=(
-                        "Unproved within the configured Lean tactic portfolio "
-                        "and wall-clock budget; this is not evidence that the "
-                        "statement is false."
+                        (
+                            "Unproved within the configured Lean tactic "
+                            "portfolio and wall-clock budget; this is not "
+                            "evidence that the statement is false."
+                        )
+                        if name in attempted_names
+                        else (
+                            "Not attempted because the shared wall-clock "
+                            "budget was exhausted before this candidate."
+                        )
                     ),
                 )
 
