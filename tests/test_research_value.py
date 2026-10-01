@@ -137,6 +137,19 @@ class ResearchValueTests(unittest.TestCase):
         self.assertFalse(assessment.accepted)
         self.assertEqual(assessment.known_derivation_distance, 1)
 
+    def test_one_times_x_is_filtered_as_two_step_known_consequence(self):
+        state = build_initial_knowledge()
+        conjecture = unary(Mul(ONE, X), X)
+
+        assessment = assess_research_value(
+            conjecture,
+            state,
+            min_reasoning_steps=3,
+        )
+
+        self.assertFalse(assessment.accepted)
+        self.assertEqual(assessment.known_derivation_distance, 2)
+
     def test_ranking_places_research_worthy_before_routine(self):
         interesting = bivariate(Add(X, Y), Add(Y, X))
         routine = unary(Add(X, ZERO), X)
