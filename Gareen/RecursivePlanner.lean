@@ -103,8 +103,8 @@ private partial def search (cfg : Config) (stats : IO.Ref Stats)
             choices := choices.push { rule := name.toString ++ suffix, goals := goals, state := (← getMCtx), score := cost }
           catch _ => pure ()
           setMCtx base
-      let choices := choices.qsort fun a b => a.score < b.score
-      for choice in choices do
+      let ranked := choices.qsort fun a b => a.score < b.score
+      for choice in ranked do
         setMCtx choice.state
         let children ← choice.goals.toArray.mapM label
         let id ← emit stats task.parent text choice.rule "try" children
