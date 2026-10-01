@@ -832,14 +832,39 @@ def check_proof(
                 continue
 
             assumption_step = proof.steps[step.discharge]
+            base_dependencies = premise_dependencies[0]
+            step_dependencies = premise_dependencies[1]
+
             if assumption_step.rule != RULE_ASSUMPTION:
                 errors.append(f"{prefix}: induction discharge target is not an assumption")
             elif assumption_step.conclusion != predicate:
                 errors.append(f"{prefix}: induction assumption is not P(n)")
-            elif step.discharge not in inherited:
-                errors.append(f"{prefix}: induction assumption is not open")
 
-            dependencies.append(inherited - frozenset({step.discharge}))
+            if step.discharge in base_dependencies:
+                errors.append(
+                    f"{prefix}: induction base case may not depend on induction hypothesis"
+                )
+            if step.discharge not in step_dependencies:
+                errors.append(
+                    f"{prefix}: induction step must depend on induction hypothesis"
+                )
+
+            remaining_dependencies = (
+                base_dependencies | step_dependencies
+            ) - frozenset({step.discharge})
+
+            for assumption_index in sorted(remaining_dependencies):
+                open_step = proof.steps[assumption_index]
+                if (
+                    open_step.rule == RULE_ASSUMPTION
+                    and variable in free_vars_formula(open_step.conclusion)
+                ):
+                    errors.append(
+                        f"{prefix}: induction variable is free in remaining "
+                        f"open assumption {assumption_index}"
+                    )
+
+            dependencies.append(remaining_dependencies)
             continue
 
         if step.rule == RULE_CONTRADICTION:
