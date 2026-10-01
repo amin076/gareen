@@ -55,10 +55,8 @@ _ALLOWED_TACTICS = tuple(_TACTIC_SCRIPTS)
 _BATCH_TACTICS = (
     "simp",
     "omega",
-    "simp_ring",
     "ring",
     "norm_num",
-    "simp_nlinarith",
     "nlinarith",
 )
 
