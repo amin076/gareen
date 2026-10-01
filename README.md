@@ -6,6 +6,50 @@ Gareen is a research project for exploring whether a machine can grow useful for
 
 The original Python formal world from Phases 1–11 is retained as a transparent educational and research sandbox. It is valuable for experimentation, but new durable mathematical claims should be checked by Lean's kernel.
 
+## Phase 17 — Mathlib theorem retrieval + multi-step proof planning
+
+Phase 16 exposed the next bottleneck: Gareen knew the vocabulary for gcd and
+divisibility, but generic tactics could not prove even a simple multi-step goal
+such as:
+
+```text
+∀ a b : Nat, Nat.gcd a b ∣ a + b
+```
+
+Phase 17 adds a retrieval/planning layer between a research goal and Lean
+verification:
+
+```text
+goal
+  ↓
+try direct Mathlib retrieval
+  ↓
+structural decomposition when needed
+  ↓
+retrieve lemmas for subgoals with Lean exact?
+  ↓
+retrieve the composition step
+  ↓
+Lean kernel verification
+```
+
+The first reusable structural schema handles divisibility over addition:
+`d ∣ x + y` is decomposed into `d ∣ x` and `d ∣ y`. The planner does
+**not** hard-code the GCD lemma names used by the regression test; Mathlib's
+retrieval engine must find the relevant facts.
+
+The exact GCD target that failed before Phase 17 is now a permanent
+planner-benchmark in `number_theory_frontier.py`. The before/after regression
+is reproducible with:
+
+```bash
+python experiments/gcd_proof_trial_v2.py --seconds 300
+```
+
+The report records the old generic-tactic baseline, positive/false controls,
+planner strategy, retrieved Mathlib constants, timing, and final kernel-checked
+result.
+
 ## Phase 16 — Mathematical research value + number-theory frontier
 
 Phase 15 proved that throughput alone is not enough: Gareen can verify many

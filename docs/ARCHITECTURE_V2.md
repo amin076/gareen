@@ -110,3 +110,23 @@ Gareen should compete on the **research loop**, not on rebuilding a kernel:
 - autonomous lemma invention;
 - definition/concept invention;
 - choosing what mathematics to investigate next.
+
+## Phase 17 — theorem retrieval and proof planning
+
+Gareen now has a first explicit theorem-retrieval/planning backend.
+
+For Lean-native number-theory goals it can:
+
+1. ask Mathlib's `exact?` retrieval engine for a direct library proof;
+2. introduce universally quantified variables and retry retrieval;
+3. recognize a reusable structural schema such as `d ∣ x + y`;
+4. decompose the goal into reusable subgoals;
+5. retrieve Mathlib facts for the subgoals;
+6. retrieve a library composition theorem from the local hypotheses;
+7. accept the result only when Lean's kernel checks the generated proof.
+
+The initial planner schema is intentionally general over the divisor and
+addends. The GCD benchmark is a regression target, not a hard-coded proof.
+Future schemas can add implication planning, transitivity, gcd/lcm structure,
+modular arithmetic, induction and recursive lemma invention.
+
