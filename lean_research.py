@@ -31,6 +31,7 @@ class LeanVerifiedDiscovery:
     formula: Formula
     lean_statement: str
     tactic: str
+    proof_class: str
     heuristic_score: int
     evidence: str
 
@@ -53,6 +54,8 @@ class LeanResearchReport:
     generated_conjectures: int
     selected_conjectures: int
     attempted_conjectures: int
+    verified_candidates: int
+    routine_verified: int
     verified_discoveries: int
     unproved_conjectures: int
     process_invocations: int
@@ -70,6 +73,14 @@ def _direct_rewrite_equivalent(item: ResearchConjecture) -> bool:
     except RuntimeError:
         return False
     return left == right
+
+
+def _proof_class(tactic: Optional[str]) -> str:
+    if tactic in {"simp", "norm_num"}:
+        return "routine-simplification"
+    if tactic is None:
+        return "unproved"
+    return "solver-verified"
 
 
 def _conjecture_priority(item: ResearchConjecture) -> tuple[int, int, int, int, str]:
@@ -213,7 +224,14 @@ class LeanBackedResearcher:
         for index, conjecture in enumerate(selected, start=1):
             name = f"lean_auto_{index:04d}"
             verified, tactic, error = outcomes[name]
-            status = "verified" if verified else "unproved-in-budget"
+            proof_class = _proof_class(tactic)
+            status = (
+                "verified-routine"
+                if verified and proof_class == "routine-simplification"
+                else "verified"
+                if verified
+                else "unproved-in-budget"
+            )
 
             attempts.append(
                 LeanResearchAttempt(
@@ -231,7 +249,11 @@ class LeanBackedResearcher:
                 )
             )
 
-            if verified and tactic is not None:
+            if (
+                verified
+                and tactic is not None
+                and proof_class != "routine-simplification"
+            ):
                 from lean_bridge import render_formula
 
                 discoveries.append(
@@ -240,15 +262,23 @@ class LeanBackedResearcher:
                         formula=conjecture.statement,
                         lean_statement=render_formula(conjecture.statement),
                         tactic=tactic,
+                        proof_class=proof_class,
                         heuristic_score=conjecture.heuristic_score,
                         evidence=conjecture.evidence,
                     )
                 )
 
+        verified_candidates = sum(1 for item in attempts if item.verified)
+        routine_verified = sum(
+            1 for item in attempts if item.status == "verified-routine"
+        )
+
         return LeanResearchReport(
             generated_conjectures=len(conjectures),
             selected_conjectures=len(selected),
             attempted_conjectures=len(attempts),
+            verified_candidates=verified_candidates,
+            routine_verified=routine_verified,
             verified_discoveries=len(discoveries),
             unproved_conjectures=sum(
                 1 for item in attempts if not item.verified
@@ -265,6 +295,8 @@ def report_to_json(report: LeanResearchReport) -> dict:
         "generated_conjectures": report.generated_conjectures,
         "selected_conjectures": report.selected_conjectures,
         "attempted_conjectures": report.attempted_conjectures,
+        "verified_candidates": report.verified_candidates,
+        "routine_verified": report.routine_verified,
         "verified_discoveries": report.verified_discoveries,
         "unproved_conjectures": report.unproved_conjectures,
         "process_invocations": report.process_invocations,
@@ -288,6 +320,7 @@ def report_to_json(report: LeanResearchReport) -> dict:
                 "name": discovery.name,
                 "statement": discovery.lean_statement,
                 "tactic": discovery.tactic,
+                "proof_class": discovery.proof_class,
                 "heuristic_score": discovery.heuristic_score,
                 "evidence": discovery.evidence,
             }
@@ -320,7 +353,9 @@ def main() -> int:
     print("Generated conjectures:", report.generated_conjectures)
     print("Selected conjectures:", report.selected_conjectures)
     print("Attempted conjectures:", report.attempted_conjectures)
-    print("Lean-verified discoveries:", report.verified_discoveries)
+    print("Lean-verified candidates:", report.verified_candidates)
+    print("Routine verified:", report.routine_verified)
+    print("Promoted discoveries:", report.verified_discoveries)
     print("Unproved in current budget:", report.unproved_conjectures)
     print("Lean process invocations:", report.process_invocations)
     print(
