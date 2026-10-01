@@ -73,13 +73,12 @@ private partial def search (cfg : Config) (stats : IO.Ref Stats)
         if decl.isImplementationDetail then continue
         try
           let goals ← goal.apply decl.toExpr
-          choices := choices.push { rule := decl.userName.toString, goals,
-            state := ← getMCtx, score := goals.length }
+          choices := choices.push { rule := decl.userName.toString, goals := goals, state := (← getMCtx), score := goals.length }
         catch _ => pure ()
         setMCtx base
       try
         goal.refl
-        choices := choices.push { rule := "rfl", goals := [], state := ← getMCtx, score := 0 }
+        choices := choices.push { rule := "rfl", goals := [], state := (← getMCtx), score := 0 }
       catch _ => pure ()
       setMCtx base
       if task.depth < cfg.maxDepth then
@@ -91,15 +90,14 @@ private partial def search (cfg : Config) (stats : IO.Ref Stats)
           if (← stats.get).nodes >= cfg.maxNodes then break
           stats.modify fun s => { s with nodes := s.nodes + 1 }
           try
-            let lemma ← LibrarySearch.mkLibrarySearchLemma name mod
-            let goals ← goal.apply lemma
+            let lemmaExpr ← LibrarySearch.mkLibrarySearchLemma name mod
+            let goals ← goal.apply lemmaExpr
             let mut cost := goals.length * 10
             for g in goals do
               if !(← g.withContext (isProp (← g.getType))) then cost := cost + 100
             if cfg.preferred.contains name then cost := cost / 2
             let suffix := match mod with | .none => "" | .mp => ".mp" | .mpr => ".mpr"
-            choices := choices.push { rule := name.toString ++ suffix, goals,
-              state := ← getMCtx, score := cost }
+            choices := choices.push { rule := name.toString ++ suffix, goals := goals, state := (← getMCtx), score := cost }
           catch _ => pure ()
           setMCtx base
       let choices := choices.qsort fun a b => a.score < b.score
@@ -126,9 +124,8 @@ elab_rules : tactic
     let before ← saveState
     let stats ← IO.mkRef ({} : Stats)
     let preferred := (names.map (·.getElems.map (·.getId))).getD #[]
-    let cfg : Config := { maxDepth := depth.getNat, maxNodes := nodes.getNat,
-      maxCandidates := width.getNat, preferred }
-    let success ← search cfg stats [{ goal, depth := 0, parent := 0 }]
+    let cfg : Config := { maxDepth := depth.getNat, maxNodes := nodes.getNat, maxCandidates := width.getNat, preferred := preferred }
+    let success ← search cfg stats [{ goal := goal, depth := 0, parent := 0 }]
     let data ← stats.get
     for event in data.events do
       logInfo m!"GAREEN_EVENT {toJson event |>.compress}"

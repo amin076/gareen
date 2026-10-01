@@ -40,6 +40,7 @@ jobs:
         run: python experiments/research_value_audit.py
 
   lean-verification:
+    timeout-minutes: 30
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -83,4 +84,17 @@ jobs:
           path: |
             .gareen/gcd-proof-retake.json
             .gareen/gcd-proof-retake.md
+          if-no-files-found: warn
+
+      - name: Phase 18 recursive planner fixed benchmark
+        run: python experiments/recursive_benchmark.py --seconds 1000 --per-goal 25 --baseline-limit 10
+
+      - name: Upload recursive planner evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gareen-phase18-evidence
+          path: |
+            .gareen/phase18-benchmark*
+            .gareen/planner_candidates/
           if-no-files-found: warn
