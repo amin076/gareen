@@ -3,7 +3,8 @@
 Gareen remains responsible for research direction: conjecture generation,
 ranking, campaign memory, and future lemma/concept invention.
 
-Lean + Mathlib are responsible for formal acceptance.
+Lean + Mathlib are responsible for formal acceptance. Failure to find a proof
+within a bounded tactic portfolio is recorded as *unproved*, never as false.
 """
 
 from __future__ import annotations
@@ -12,10 +13,15 @@ import argparse
 from dataclasses import dataclass
 import json
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Sequence
 
-from artificial_mathematician import generate_research_conjectures
-from lean_bridge import LeanBridge, LeanVerificationResult
+from artificial_mathematician import ResearchConjecture, generate_research_conjectures
+from lean_bridge import (
+    LeanBatchCandidate,
+    LeanBatchVerificationResult,
+    LeanBridge,
+    LeanVerificationResult,
+)
 from math_world import Formula, KnowledgeState
 
 
@@ -33,18 +39,78 @@ class LeanVerifiedDiscovery:
 class LeanResearchAttempt:
     name: str
     lean_statement: str
+    status: str
     verified: bool
     tactic: Optional[str]
     error: str
+    heuristic_score: int
+    variable_count: int
 
 
 @dataclass(frozen=True)
 class LeanResearchReport:
     generated_conjectures: int
+    selected_conjectures: int
     attempted_conjectures: int
     verified_discoveries: int
+    unproved_conjectures: int
+    process_invocations: int
+    verification_elapsed_seconds: float
     attempts: tuple[LeanResearchAttempt, ...]
     discoveries: tuple[LeanVerifiedDiscovery, ...]
+
+
+def _conjecture_priority(item: ResearchConjecture) -> tuple[int, int, int, str]:
+    """Prefer structurally richer conjectures without starving simple ones."""
+
+    return (
+        -item.heuristic_score,
+        -len(str(item.statement)),
+        -len(item.variables),
+        str(item.statement),
+    )
+
+
+def select_research_conjectures(
+    conjectures: Sequence[ResearchConjecture],
+    *,
+    limit: int,
+) -> tuple[ResearchConjecture, ...]:
+    """Diversity-first selection across arities.
+
+    Phase 11 generated unary conjectures before bivariate ones. For a bounded
+    campaign that can hide structurally richer targets behind many simple
+    identities. This selector round-robins arity buckets while prioritizing
+    stronger heuristic scores inside each bucket.
+    """
+
+    if limit < 1:
+        return ()
+
+    buckets: dict[int, list[ResearchConjecture]] = {}
+    for item in conjectures:
+        buckets.setdefault(len(item.variables), []).append(item)
+
+    for bucket in buckets.values():
+        bucket.sort(key=_conjecture_priority)
+
+    arities = sorted(buckets, reverse=True)
+    selected: list[ResearchConjecture] = []
+
+    while len(selected) < limit:
+        progressed = False
+        for arity in arities:
+            bucket = buckets[arity]
+            if not bucket:
+                continue
+            selected.append(bucket.pop(0))
+            progressed = True
+            if len(selected) >= limit:
+                break
+        if not progressed:
+            break
+
+    return tuple(selected)
 
 
 class LeanBackedResearcher:
@@ -54,10 +120,67 @@ class LeanBackedResearcher:
         self,
         bridge: Optional[LeanBridge] = None,
         *,
-        max_attempts: int = 5,
+        max_attempts: int = 50,
+        batch_size: int = 64,
     ) -> None:
         self.bridge = bridge or LeanBridge()
         self.max_attempts = max_attempts
+        self.batch_size = batch_size
+
+    def _verify_selected(
+        self,
+        selected: Sequence[ResearchConjecture],
+    ) -> tuple[
+        dict[str, tuple[bool, Optional[str], str]],
+        int,
+        float,
+    ]:
+        named = tuple(
+            (
+                f"lean_auto_{index:04d}",
+                conjecture,
+            )
+            for index, conjecture in enumerate(selected, start=1)
+        )
+
+        verify_batch = getattr(self.bridge, "verify_batch", None)
+        if callable(verify_batch):
+            batch: LeanBatchVerificationResult = verify_batch(
+                tuple(
+                    LeanBatchCandidate(
+                        theorem_name=name,
+                        formula=conjecture.statement,
+                    )
+                    for name, conjecture in named
+                ),
+                batch_size=self.batch_size,
+            )
+            return (
+                {
+                    item.theorem_name: (
+                        item.verified,
+                        item.tactic,
+                        item.error,
+                    )
+                    for item in batch.results
+                },
+                batch.process_invocations,
+                batch.elapsed_seconds,
+            )
+
+        # Compatibility fallback for small test doubles and custom bridges.
+        outcomes: dict[str, tuple[bool, Optional[str], str]] = {}
+        for name, conjecture in named:
+            result: LeanVerificationResult = self.bridge.verify_formula(
+                conjecture.statement,
+                theorem_name=name,
+            )
+            outcomes[name] = (
+                result.verified,
+                result.tactic,
+                result.error,
+            )
+        return outcomes, len(named), 0.0
 
     def research(
         self,
@@ -65,35 +188,42 @@ class LeanBackedResearcher:
     ) -> LeanResearchReport:
         research_state = state or KnowledgeState()
         conjectures = generate_research_conjectures(research_state)
+        selected = select_research_conjectures(
+            conjectures,
+            limit=min(self.max_attempts, len(conjectures)),
+        )
 
+        outcomes, process_invocations, elapsed = self._verify_selected(selected)
         attempts: list[LeanResearchAttempt] = []
         discoveries: list[LeanVerifiedDiscovery] = []
 
-        for index, conjecture in enumerate(
-            conjectures[: self.max_attempts],
-            start=1,
-        ):
-            name = f"lean_auto_{index:03d}"
-            result: LeanVerificationResult = self.bridge.verify_formula(
-                conjecture.statement,
-                theorem_name=name,
-            )
+        for index, conjecture in enumerate(selected, start=1):
+            name = f"lean_auto_{index:04d}"
+            verified, tactic, error = outcomes[name]
+            status = "verified" if verified else "unproved-in-budget"
+
             attempts.append(
                 LeanResearchAttempt(
                     name=name,
-                    lean_statement=result.statement,
-                    verified=result.verified,
-                    tactic=result.tactic,
-                    error=result.error,
+                    lean_statement=str(conjecture.statement),
+                    status=status,
+                    verified=verified,
+                    tactic=tactic,
+                    error=error,
+                    heuristic_score=conjecture.heuristic_score,
+                    variable_count=len(conjecture.variables),
                 )
             )
-            if result.verified and result.tactic is not None:
+
+            if verified and tactic is not None:
+                from lean_bridge import render_formula
+
                 discoveries.append(
                     LeanVerifiedDiscovery(
                         name=name,
                         formula=conjecture.statement,
-                        lean_statement=result.statement,
-                        tactic=result.tactic,
+                        lean_statement=render_formula(conjecture.statement),
+                        tactic=tactic,
                         heuristic_score=conjecture.heuristic_score,
                         evidence=conjecture.evidence,
                     )
@@ -101,8 +231,14 @@ class LeanBackedResearcher:
 
         return LeanResearchReport(
             generated_conjectures=len(conjectures),
+            selected_conjectures=len(selected),
             attempted_conjectures=len(attempts),
             verified_discoveries=len(discoveries),
+            unproved_conjectures=sum(
+                1 for item in attempts if not item.verified
+            ),
+            process_invocations=process_invocations,
+            verification_elapsed_seconds=elapsed,
             attempts=tuple(attempts),
             discoveries=tuple(discoveries),
         )
@@ -111,15 +247,22 @@ class LeanBackedResearcher:
 def report_to_json(report: LeanResearchReport) -> dict:
     return {
         "generated_conjectures": report.generated_conjectures,
+        "selected_conjectures": report.selected_conjectures,
         "attempted_conjectures": report.attempted_conjectures,
         "verified_discoveries": report.verified_discoveries,
+        "unproved_conjectures": report.unproved_conjectures,
+        "process_invocations": report.process_invocations,
+        "verification_elapsed_seconds": report.verification_elapsed_seconds,
         "attempts": [
             {
                 "name": attempt.name,
                 "statement": attempt.lean_statement,
+                "status": attempt.status,
                 "verified": attempt.verified,
                 "tactic": attempt.tactic,
                 "error": attempt.error,
+                "heuristic_score": attempt.heuristic_score,
+                "variable_count": attempt.variable_count,
             }
             for attempt in report.attempts
         ],
@@ -138,7 +281,8 @@ def report_to_json(report: LeanResearchReport) -> dict:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--limit", type=int, default=3)
+    parser.add_argument("--limit", type=int, default=50)
+    parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--json-out", type=Path)
     args = parser.parse_args()
 
@@ -150,14 +294,22 @@ def main() -> int:
     researcher = LeanBackedResearcher(
         bridge,
         max_attempts=max(1, args.limit),
+        batch_size=max(1, args.batch_size),
     )
     report = researcher.research(KnowledgeState())
 
     print("Gareen Lean-backed research")
     print("===========================")
     print("Generated conjectures:", report.generated_conjectures)
+    print("Selected conjectures:", report.selected_conjectures)
     print("Attempted conjectures:", report.attempted_conjectures)
     print("Lean-verified discoveries:", report.verified_discoveries)
+    print("Unproved in current budget:", report.unproved_conjectures)
+    print("Lean process invocations:", report.process_invocations)
+    print(
+        "Verification elapsed seconds:",
+        round(report.verification_elapsed_seconds, 3),
+    )
 
     for discovery in report.discoveries:
         print(
@@ -172,7 +324,7 @@ def main() -> int:
             encoding="utf-8",
         )
 
-    return 0 if report.verified_discoveries else 1
+    return 0 if report.attempted_conjectures else 1
 
 
 if __name__ == "__main__":
