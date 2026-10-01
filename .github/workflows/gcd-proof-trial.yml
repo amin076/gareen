@@ -1,0 +1,57 @@
+name: Gareen GCD proof trial
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - experiment-gcd-proof-trial
+    paths:
+      - "experiments/RUN_GCD_TRIAL"
+
+jobs:
+  gcd-proof-trial:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Check out experiment branch
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up Lean and Mathlib cache
+        uses: leanprover/lean-action@v1
+        with:
+          auto-config: false
+          build: true
+          test: false
+          use-mathlib-cache: true
+          axiom-audit: true
+
+      - name: Run prepared 30-minute GCD proof trial
+        run: |
+          PYTHONPATH=. python experiments/gcd_proof_trial.py \
+            --seconds 1800 \
+            --per-tactic-timeout 180 \
+            --json-out .gareen/gcd-proof-trial.json \
+            --markdown-out .gareen/gcd-proof-trial.md
+
+      - name: Print trial summary
+        if: always()
+        run: |
+          if [ -f .gareen/gcd-proof-trial.md ]; then
+            cat .gareen/gcd-proof-trial.md
+          fi
+
+      - name: Upload full trial logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gareen-gcd-proof-trial
+          path: |
+            .gareen/gcd-proof-trial.json
+            .gareen/gcd-proof-trial.md
+          if-no-files-found: warn
