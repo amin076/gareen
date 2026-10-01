@@ -23,6 +23,11 @@ from lean_bridge import (
     LeanVerificationResult,
 )
 from math_world import Formula, KnowledgeState, normalize
+from research_value import (
+    ResearchValueAssessment,
+    assess_research_value,
+    rank_research_conjectures,
+)
 
 
 @dataclass(frozen=True)
@@ -33,6 +38,9 @@ class LeanVerifiedDiscovery:
     tactic: str
     proof_class: str
     heuristic_score: int
+    research_value_score: int
+    reuse_potential: int
+    known_derivation_distance: Optional[int]
     evidence: str
 
 
@@ -47,11 +55,16 @@ class LeanResearchAttempt:
     heuristic_score: int
     variable_count: int
     direct_rewrite_equivalent: bool
+    research_value_score: int
+    research_value_reason: str
+    known_derivation_distance: Optional[int]
+    reuse_potential: int
 
 
 @dataclass(frozen=True)
 class LeanResearchReport:
     generated_conjectures: int
+    filtered_low_value: int
     selected_conjectures: int
     attempted_conjectures: int
     verified_candidates: int
@@ -99,24 +112,34 @@ def select_research_conjectures(
     conjectures: Sequence[ResearchConjecture],
     *,
     limit: int,
+    state: Optional[KnowledgeState] = None,
+    min_reasoning_steps: int = 3,
+    min_research_value: int = 14,
 ) -> tuple[ResearchConjecture, ...]:
-    """Diversity-first selection across arities.
+    """Select only research-worthy conjectures, then preserve arity diversity.
 
-    Phase 11 generated unary conjectures before bivariate ones. For a bounded
-    campaign that can hide structurally richer targets behind many simple
-    identities. This selector round-robins arity buckets while prioritizing
-    stronger heuristic scores inside each bucket.
+    Numerical examples and short consequences of existing knowledge can still
+    be used upstream as evidence, but they no longer consume Lean proof budget.
     """
 
     if limit < 1:
         return ()
 
-    buckets: dict[int, list[ResearchConjecture]] = {}
-    for item in conjectures:
-        buckets.setdefault(len(item.variables), []).append(item)
+    research_state = state or KnowledgeState()
+    ranked = rank_research_conjectures(
+        conjectures,
+        research_state,
+        min_reasoning_steps=min_reasoning_steps,
+        min_score=min_research_value,
+    )
 
-    for bucket in buckets.values():
-        bucket.sort(key=_conjecture_priority)
+    buckets: dict[int, list[ResearchConjecture]] = {}
+    for item in ranked:
+        if not item.assessment.accepted:
+            continue
+        buckets.setdefault(len(item.conjecture.variables), []).append(
+            item.conjecture
+        )
 
     arities = sorted(buckets, reverse=True)
     selected: list[ResearchConjecture] = []
@@ -146,10 +169,14 @@ class LeanBackedResearcher:
         *,
         max_attempts: int = 50,
         batch_size: int = 64,
+        min_reasoning_steps: int = 3,
+        min_research_value: int = 14,
     ) -> None:
         self.bridge = bridge or LeanBridge()
         self.max_attempts = max_attempts
         self.batch_size = batch_size
+        self.min_reasoning_steps = min_reasoning_steps
+        self.min_research_value = min_research_value
 
     def _verify_selected(
         self,
@@ -212,9 +239,26 @@ class LeanBackedResearcher:
     ) -> LeanResearchReport:
         research_state = state or KnowledgeState()
         conjectures = generate_research_conjectures(research_state)
+        ranked = rank_research_conjectures(
+            conjectures,
+            research_state,
+            min_reasoning_steps=self.min_reasoning_steps,
+            min_score=self.min_research_value,
+        )
+        filtered_low_value = sum(
+            1 for item in ranked if not item.assessment.accepted
+        )
+        assessment_by_statement: dict[str, ResearchValueAssessment] = {
+            str(item.conjecture.statement): item.assessment
+            for item in ranked
+        }
+
         selected = select_research_conjectures(
             conjectures,
             limit=min(self.max_attempts, len(conjectures)),
+            state=research_state,
+            min_reasoning_steps=self.min_reasoning_steps,
+            min_research_value=self.min_research_value,
         )
 
         outcomes, process_invocations, elapsed = self._verify_selected(selected)
@@ -224,6 +268,7 @@ class LeanBackedResearcher:
         for index, conjecture in enumerate(selected, start=1):
             name = f"lean_auto_{index:04d}"
             verified, tactic, error = outcomes[name]
+            assessment = assessment_by_statement[str(conjecture.statement)]
             proof_class = _proof_class(tactic)
             status = (
                 "verified-routine"
@@ -246,6 +291,10 @@ class LeanBackedResearcher:
                     direct_rewrite_equivalent=_direct_rewrite_equivalent(
                         conjecture
                     ),
+                    research_value_score=assessment.score,
+                    research_value_reason=assessment.reason,
+                    known_derivation_distance=assessment.known_derivation_distance,
+                    reuse_potential=assessment.reuse_potential,
                 )
             )
 
@@ -264,6 +313,9 @@ class LeanBackedResearcher:
                         tactic=tactic,
                         proof_class=proof_class,
                         heuristic_score=conjecture.heuristic_score,
+                        research_value_score=assessment.score,
+                        reuse_potential=assessment.reuse_potential,
+                        known_derivation_distance=assessment.known_derivation_distance,
                         evidence=conjecture.evidence,
                     )
                 )
@@ -275,6 +327,7 @@ class LeanBackedResearcher:
 
         return LeanResearchReport(
             generated_conjectures=len(conjectures),
+            filtered_low_value=filtered_low_value,
             selected_conjectures=len(selected),
             attempted_conjectures=len(attempts),
             verified_candidates=verified_candidates,
@@ -293,6 +346,7 @@ class LeanBackedResearcher:
 def report_to_json(report: LeanResearchReport) -> dict:
     return {
         "generated_conjectures": report.generated_conjectures,
+        "filtered_low_value": report.filtered_low_value,
         "selected_conjectures": report.selected_conjectures,
         "attempted_conjectures": report.attempted_conjectures,
         "verified_candidates": report.verified_candidates,
@@ -312,6 +366,10 @@ def report_to_json(report: LeanResearchReport) -> dict:
                 "heuristic_score": attempt.heuristic_score,
                 "variable_count": attempt.variable_count,
                 "direct_rewrite_equivalent": attempt.direct_rewrite_equivalent,
+                "research_value_score": attempt.research_value_score,
+                "research_value_reason": attempt.research_value_reason,
+                "known_derivation_distance": attempt.known_derivation_distance,
+                "reuse_potential": attempt.reuse_potential,
             }
             for attempt in report.attempts
         ],
@@ -322,6 +380,9 @@ def report_to_json(report: LeanResearchReport) -> dict:
                 "tactic": discovery.tactic,
                 "proof_class": discovery.proof_class,
                 "heuristic_score": discovery.heuristic_score,
+                "research_value_score": discovery.research_value_score,
+                "reuse_potential": discovery.reuse_potential,
+                "known_derivation_distance": discovery.known_derivation_distance,
                 "evidence": discovery.evidence,
             }
             for discovery in report.discoveries
@@ -333,6 +394,8 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--limit", type=int, default=50)
     parser.add_argument("--batch-size", type=int, default=64)
+    parser.add_argument("--min-reasoning-steps", type=int, default=3)
+    parser.add_argument("--min-research-value", type=int, default=14)
     parser.add_argument("--json-out", type=Path)
     args = parser.parse_args()
 
@@ -345,12 +408,15 @@ def main() -> int:
         bridge,
         max_attempts=max(1, args.limit),
         batch_size=max(1, args.batch_size),
+        min_reasoning_steps=max(1, args.min_reasoning_steps),
+        min_research_value=max(0, args.min_research_value),
     )
     report = researcher.research(KnowledgeState())
 
     print("Gareen Lean-backed research")
     print("===========================")
     print("Generated conjectures:", report.generated_conjectures)
+    print("Filtered as low research value:", report.filtered_low_value)
     print("Selected conjectures:", report.selected_conjectures)
     print("Attempted conjectures:", report.attempted_conjectures)
     print("Lean-verified candidates:", report.verified_candidates)
