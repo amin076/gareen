@@ -374,6 +374,7 @@ class LeanBridge:
         tactics: Iterable[str] = _BATCH_TACTICS,
         batch_size: int = 64,
         round_timeout_seconds: Optional[int] = None,
+        wall_clock_budget_seconds: Optional[float] = None,
     ) -> LeanBatchVerificationResult:
         """Verify many independent candidates with amortized Lean startup cost."""
 
@@ -416,6 +417,11 @@ class LeanBridge:
             )
 
         timeout = round_timeout_seconds or self.timeout_seconds
+        deadline = (
+            started + wall_clock_budget_seconds
+            if wall_clock_budget_seconds is not None
+            else None
+        )
         self.generated_dir.mkdir(parents=True, exist_ok=True)
         resolved: dict[str, LeanBatchItemResult] = {}
         process_invocations = 0
@@ -426,6 +432,8 @@ class LeanBridge:
 
             for tactic in tactics_tuple:
                 if not pending:
+                    break
+                if deadline is not None and time.monotonic() >= deadline:
                     break
 
                 round_candidates = tuple(pending.values())
@@ -446,12 +454,22 @@ class LeanBridge:
                         command_path = str(source_path)
 
                     try:
+                        effective_timeout = timeout
+                        if deadline is not None:
+                            remaining = deadline - time.monotonic()
+                            if remaining <= 0:
+                                break
+                            effective_timeout = min(
+                                timeout,
+                                max(1.0, remaining),
+                            )
+
                         completed = subprocess.run(
                             ["lake", "env", "lean", command_path],
                             cwd=self.repo_root,
                             capture_output=True,
                             text=True,
-                            timeout=timeout,
+                            timeout=effective_timeout,
                             check=False,
                         )
                         returncode = completed.returncode
@@ -512,7 +530,7 @@ class LeanBridge:
                     tactic=None,
                     error=(
                         "Unproved within the configured Lean tactic portfolio "
-                        "and batch budget; this is not evidence that the "
+                        "and wall-clock budget; this is not evidence that the "
                         "statement is false."
                     ),
                 )
