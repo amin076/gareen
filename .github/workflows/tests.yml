@@ -36,6 +36,9 @@ jobs:
       - name: Run Artificial Mathematician demo
         run: python artificial_mathematician.py
 
+      - name: Audit mathematical research-value filter
+        run: python experiments/research_value_audit.py
+
   lean-verification:
     runs-on: ubuntu-latest
     steps:
