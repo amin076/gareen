@@ -278,7 +278,15 @@ def run_campaign(
     )
 
     bridge = LeanBridge(timeout_seconds=45)
-    tactics = ("simp", "omega", "ring", "norm_num", "nlinarith")
+    tactics = (
+        "simp",
+        "omega",
+        "simp_ring",
+        "ring",
+        "norm_num",
+        "simp_nlinarith",
+        "nlinarith",
+    )
 
     generation_elapsed = time.monotonic() - started
     remaining_budget = max(1.0, seconds - generation_elapsed)
@@ -357,6 +365,16 @@ def run_campaign(
         for item in attempted_records
         if not item.verified
     ]
+    routine_verified = [
+        item
+        for item in verified_records
+        if item.tactic in {"simp", "norm_num"}
+    ]
+    solver_verified = [
+        item
+        for item in verified_records
+        if item.tactic not in {"simp", "norm_num"}
+    ]
     budget_skipped = [item for item in records if not item.attempted]
 
     payload = {
@@ -367,6 +385,8 @@ def run_campaign(
         "generated_candidates": len(candidates),
         "attempted_candidates": len(attempted_records),
         "verified_candidates": len(verified_records),
+        "routine_verified": len(routine_verified),
+        "solver_verified": len(solver_verified),
         "unproved_in_budget": len(unproved_records),
         "budget_skipped_candidates": len(budget_skipped),
         "verification_rate_among_attempted": (
@@ -409,6 +429,8 @@ def run_campaign(
         f"- Generated candidates: {len(candidates)}",
         f"- Attempted candidates: {len(attempted_records)}",
         f"- Lean-verified candidates: {len(verified_records)}",
+        f"- Routine verified: {len(routine_verified)}",
+        f"- Solver verified: {len(solver_verified)}",
         f"- Unproved in budget: {len(unproved_records)}",
         f"- Budget-skipped candidates: {len(budget_skipped)}",
         f"- Lean process invocations: {payload['process_invocations']}",
@@ -441,6 +463,8 @@ def run_campaign(
     print("Elapsed seconds:", round(elapsed, 3))
     print("Attempted candidates:", len(attempted_records))
     print("Lean-verified candidates:", len(verified_records))
+    print("Routine verified:", len(routine_verified))
+    print("Solver verified:", len(solver_verified))
     print("Unproved in current budget:", len(unproved_records))
     print("Budget-skipped candidates:", len(budget_skipped))
     print("Lean process invocations:", payload["process_invocations"])
