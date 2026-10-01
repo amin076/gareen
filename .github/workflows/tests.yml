@@ -67,3 +67,20 @@ jobs:
 
       - name: Run number theory frontier smoke test
         run: python number_theory_frontier.py
+
+      - name: Retest failed GCD target with theorem retrieval
+        run: |
+          python experiments/gcd_proof_trial_v2.py \
+            --seconds 300 \
+            --json-out .gareen/gcd-proof-retake.json \
+            --markdown-out .gareen/gcd-proof-retake.md
+
+      - name: Upload GCD retake evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gareen-gcd-proof-retake
+          path: |
+            .gareen/gcd-proof-retake.json
+            .gareen/gcd-proof-retake.md
+          if-no-files-found: warn
