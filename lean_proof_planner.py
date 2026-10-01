@@ -226,6 +226,11 @@ def _extract_suggestions(stdout: str, stderr: str) -> tuple[str, ...]:
 def _constants_from_suggestions(suggestions: tuple[str, ...]) -> tuple[str, ...]:
     constants: list[str] = []
     for suggestion in suggestions:
+        # Qualified Mathlib constants can appear under parentheses or inside
+        # a composed proof term, not only immediately after `exact`.
+        for name in _QUALIFIED_CONST_RE.findall(suggestion):
+            if name not in constants:
+                constants.append(name)
         for match in _IDENT_RE.finditer(suggestion):
             name = match.group(1)
             if name not in constants:
