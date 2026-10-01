@@ -247,12 +247,18 @@ def known_derivation_distance(
     state: KnowledgeState,
     *,
     max_steps: int = 2,
-    max_states: int = 512,
+    max_states: int = 2048,
 ) -> Optional[int]:
     """Search for a short consequence of already verified Gareen theorems.
 
-    Primitive normalization is applied for free around each theorem rewrite.
-    The returned distance counts uses of previously verified theorem equations.
+    Both raw and primitive-normalized expression shapes are retained. This is
+    important for detecting short chains such as x = x * 1 = 1 * x, where
+    aggressively normalizing the middle expression would erase the shape
+    needed by multiplication commutativity.
+
+    The distance counts uses of already verified theorem equations. Primitive
+    normalization is used only as an additional equivalent search state; it
+    never replaces the raw state.
     """
 
     primitive = primitive_rewrite_distance(
@@ -267,33 +273,41 @@ def known_derivation_distance(
         return None
 
     try:
-        start, _ = _primitive_normal_form(conjecture.body.left)
-        target, _ = _primitive_normal_form(conjecture.body.right)
+        start_normal, _ = _primitive_normal_form(conjecture.body.left)
+        target_normal, _ = _primitive_normal_form(conjecture.body.right)
     except RuntimeError:
-        return None
+        start_normal = conjecture.body.left
+        target_normal = conjecture.body.right
 
-    queue = deque([(start, 0)])
-    seen: set[Expr] = {start}
+    targets = {conjecture.body.right, target_normal}
+    starts = {conjecture.body.left, start_normal}
+
+    queue = deque((item, 0) for item in starts)
+    seen: set[Expr] = set(starts)
 
     while queue and len(seen) <= max_states:
         current, depth = queue.popleft()
-        if current == target:
+        if current in targets:
             return depth
         if depth >= max_steps:
             continue
 
         for rule in rules:
             for rewritten in _rewrite_anywhere(current, rule):
+                next_states = {rewritten}
                 try:
                     normalized, _ = _primitive_normal_form(rewritten)
+                    next_states.add(normalized)
                 except RuntimeError:
-                    continue
-                if normalized == target:
-                    return depth + 1
-                if normalized in seen:
-                    continue
-                seen.add(normalized)
-                queue.append((normalized, depth + 1))
+                    pass
+
+                for next_state in next_states:
+                    if next_state in targets:
+                        return depth + 1
+                    if next_state in seen:
+                        continue
+                    seen.add(next_state)
+                    queue.append((next_state, depth + 1))
 
     return None
 
