@@ -86,9 +86,8 @@ private partial def search (cfg : Config) (stats : IO.Ref Stats)
       setMCtx base
       if task.depth < cfg.maxDepth then
         let candidates ← LibrarySearch.libSearchFindDecls type
-        let candidates := candidates.qsort fun a b =>
-          (if cfg.preferred.contains a.1 then 0 else 1) <
-          (if cfg.preferred.contains b.1 then 0 else 1)
+        let candidates := candidates.filter (fun c => cfg.preferred.contains c.1) ++
+          candidates.filter (fun c => !cfg.preferred.contains c.1)
         for (name, mod) in candidates.toList.take cfg.maxCandidates do
           if (← stats.get).nodes >= cfg.maxNodes then break
           stats.modify fun s => { s with nodes := s.nodes + 1 }
@@ -103,7 +102,8 @@ private partial def search (cfg : Config) (stats : IO.Ref Stats)
             choices := choices.push { rule := name.toString ++ suffix, goals := goals, state := (← getMCtx), score := cost }
           catch _ => pure ()
           setMCtx base
-      let ranked := choices.qsort fun a b => a.score < b.score
+      let ranked := choices.qsort fun a b =>
+        if a.score == b.score then a.rule < b.rule else a.score < b.score
       for choice in ranked do
         setMCtx choice.state
         let children ← choice.goals.toArray.mapM label

@@ -55,6 +55,9 @@ jobs:
           use-mathlib-cache: true
           axiom-audit: true
 
+      - name: Test recursive backtracking in Lean
+        run: lake env lean tests/RecursivePlanner.lean
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
