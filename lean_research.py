@@ -196,28 +196,87 @@ class LeanBackedResearcher:
 
         verify_batch = getattr(self.bridge, "verify_batch", None)
         if callable(verify_batch):
-            batch: LeanBatchVerificationResult = verify_batch(
-                tuple(
-                    LeanBatchCandidate(
-                        theorem_name=name,
-                        formula=conjecture.statement,
-                    )
-                    for name, conjecture in named
-                ),
-                batch_size=self.batch_size,
+            candidates = tuple(
+                LeanBatchCandidate(
+                    theorem_name=name,
+                    formula=conjecture.statement,
+                )
+                for name, conjecture in named
             )
-            return (
-                {
-                    item.theorem_name: (
+
+            # Cheap theorem-value gate: if simp/norm_num closes a statement
+            # immediately, record it as verified-routine and do not spend the
+            # stronger prover portfolio on it.
+            try:
+                routine_batch: LeanBatchVerificationResult = verify_batch(
+                    candidates,
+                    tactics=("simp", "norm_num"),
+                    batch_size=self.batch_size,
+                )
+                routine_outcomes = {
+                    item.theorem_name: item
+                    for item in routine_batch.results
+                    if item.verified
+                }
+                remaining = tuple(
+                    item
+                    for item in candidates
+                    if item.theorem_name not in routine_outcomes
+                )
+
+                strong_batch = (
+                    verify_batch(
+                        remaining,
+                        tactics=("omega", "ring", "nlinarith", "aesop"),
+                        batch_size=self.batch_size,
+                    )
+                    if remaining
+                    else LeanBatchVerificationResult(
+                        results=(),
+                        process_invocations=0,
+                        elapsed_seconds=0.0,
+                    )
+                )
+                strong_outcomes = {
+                    item.theorem_name: item
+                    for item in strong_batch.results
+                }
+
+                outcomes: dict[str, tuple[bool, Optional[str], str]] = {}
+                for name, _ in named:
+                    item = routine_outcomes.get(name) or strong_outcomes[name]
+                    outcomes[name] = (
                         item.verified,
                         item.tactic,
                         item.error,
                     )
-                    for item in batch.results
-                },
-                batch.process_invocations,
-                batch.elapsed_seconds,
-            )
+
+                return (
+                    outcomes,
+                    routine_batch.process_invocations
+                    + strong_batch.process_invocations,
+                    routine_batch.elapsed_seconds
+                    + strong_batch.elapsed_seconds,
+                )
+            except TypeError:
+                # Compatibility with small test doubles/custom bridges whose
+                # batch API predates tactic selection.
+                batch: LeanBatchVerificationResult = verify_batch(
+                    candidates,
+                    batch_size=self.batch_size,
+                )
+                return (
+                    {
+                        item.theorem_name: (
+                            item.verified,
+                            item.tactic,
+                            item.error,
+                        )
+                        for item in batch.results
+                    },
+                    batch.process_invocations,
+                    batch.elapsed_seconds,
+                )
 
         # Compatibility fallback for small test doubles and custom bridges.
         outcomes: dict[str, tuple[bool, Optional[str], str]] = {}
