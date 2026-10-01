@@ -69,7 +69,9 @@ class LeanBackedResearchTests(unittest.TestCase):
 
         self.assertGreater(report.generated_conjectures, 0)
         self.assertEqual(report.attempted_conjectures, 2)
-        self.assertEqual(report.verified_discoveries, 2)
+        self.assertEqual(report.verified_candidates, 2)
+        self.assertEqual(report.routine_verified, 2)
+        self.assertEqual(report.verified_discoveries, 0)
         self.assertEqual(len(bridge.calls), 2)
 
     def test_unproved_candidate_is_not_a_discovery(self):
@@ -99,6 +101,8 @@ class LeanBackedResearchTests(unittest.TestCase):
 
         self.assertEqual(len(bridge.batch_calls), 1)
         self.assertEqual(report.attempted_conjectures, 4)
+        self.assertEqual(report.verified_candidates, 4)
+        self.assertEqual(report.routine_verified, 0)
         self.assertEqual(report.verified_discoveries, 4)
         self.assertEqual(report.process_invocations, 2)
         self.assertEqual(report.verification_elapsed_seconds, 0.25)
@@ -124,9 +128,11 @@ class LeanBackedResearchTests(unittest.TestCase):
         payload = report_to_json(report)
 
         self.assertEqual(payload["attempted_conjectures"], 1)
-        self.assertEqual(payload["verified_discoveries"], 1)
+        self.assertEqual(payload["verified_candidates"], 1)
+        self.assertEqual(payload["routine_verified"], 1)
+        self.assertEqual(payload["verified_discoveries"], 0)
         self.assertEqual(payload["unproved_conjectures"], 0)
-        self.assertEqual(len(payload["discoveries"]), 1)
+        self.assertEqual(len(payload["discoveries"]), 0)
 
 
 if __name__ == "__main__":
