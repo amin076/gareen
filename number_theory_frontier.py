@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from lean_bridge import LeanBatchCandidate, LeanBatchVerificationResult, LeanBridge
-from lean_proof_planner import LeanProofPlanner, PlannedProofResult
+from recursive_proof_planner import RecursiveProofPlanner as LeanProofPlanner, PlannedProofResult
 
 
 @dataclass(frozen=True)
