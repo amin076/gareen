@@ -173,6 +173,15 @@ private partial def search (cfg : Config) (stats : IO.Ref Stats)
                 directClosures := directClosures + 1
             if directClosures > 0 then
               cost := cost / (1 + 3 * directClosures)
+            -- A direct-closure bonus must not hide a hard sibling. The previous
+            -- scoring could make a transitivity branch look excellent because one
+            -- residual goal closed immediately while another unsupported residual
+            -- goal consumed the whole DFS budget. Penalize that mixed state after
+            -- the bonus has been applied, so uniformly easy decompositions still
+            -- benefit while "one easy + one hard" branches are deprioritized.
+            let unsupported := remaining.length - directClosures
+            if directClosures > 0 && unsupported > 0 then
+              cost := cost + 40 * unsupported
             if locallyClosed > 0 then
               cost := cost / (locallyClosed + 1)
             -- If some premises closed locally but none of the residual goals has
