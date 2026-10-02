@@ -1386,3 +1386,41 @@ This experiment should be interpreted carefully:
 - failure after the long budget identifies a stronger premise-selection or
   strategy-composition gap;
 - it is not evidence about open conjectures or research-level novelty.
+
+
+## Phase 19 lean-auto integration validation
+
+The Lake manifest issue was repaired and independently validated with
+`lake update auto`. The pinned `lean-auto` dependency then built successfully
+inside the Gareen CI environment, so the following results are genuine proof
+results rather than dependency/setup failures.
+
+Three diagnostic goals were tested:
+
+| Goal | Result | Winner |
+|---|---|---|
+| Euclid anchor: `∀ n, ∃ p, Nat.Prime p ∧ n < p` | unproved | none |
+| divisibility: `d ∣ a → d ∣ b → d ∣ a+b` | verified | Gareen advanced |
+| double-coprime frontier | unproved | none |
+
+Overall result: **1/3 verified**.
+
+The direct `auto` and `auto [*]` attempts executed successfully but returned
+unproved quickly (about 1.7 seconds per attempt on these goals). The only
+successful theorem was the divisibility composition, and it was recovered by
+Gareen's advanced recursive fallback rather than by `lean-auto`.
+
+This is important for interpreting the integration correctly. The current
+Phase 19 adapter activates the base `auto` tactic, but it does **not yet**
+activate the stronger external backends documented by lean-auto:
+- SMT mode,
+- TPTP / Zipperposition,
+- native prover mode with Duper or another proof-producing backend.
+
+Therefore this experiment should not be read as “lean-auto with ATP failed.”
+It establishes only that the base tactic, as currently configured, did not
+expand Gareen's frontier on these three goals.
+
+The next integration step is to configure a proof-producing or externally
+checked backend rather than spending more runtime on the same base `auto`
+configuration.
