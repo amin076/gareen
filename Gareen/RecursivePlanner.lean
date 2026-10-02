@@ -22,6 +22,7 @@ structure Event where
   status : String
   children : Array String := #[]
   declaration : String := ""
+  score : Nat := 0
   deriving ToJson
 
 structure Stats where
@@ -42,10 +43,10 @@ structure Choice where
   declaration : String := ""
 
 private def emit (stats : IO.Ref Stats) (parent : Nat) (goal rule status : String)
-    (children : Array String := #[]) (declaration : String := "") : MetaM Nat := do
+    (children : Array String := #[]) (declaration : String := "") (score : Nat := 0) : MetaM Nat := do
   let s ← stats.get
   let id := s.events.size + 1
-  stats.set { s with events := s.events.push { id, parent, goal, rule, status, children, declaration } }
+  stats.set { s with events := s.events.push { id, parent, goal, rule, status, children, declaration, score } }
   return id
 
 private def label (g : MVarId) : MetaM String := g.withContext do
@@ -189,10 +190,20 @@ private partial def search (cfg : Config) (stats : IO.Ref Stats)
           setMCtx base
       let ranked := choices.qsort fun a b =>
         if a.score == b.score then a.rule < b.rule else a.score < b.score
+      -- Diagnostic only: record the top-ranked root alternatives without
+      -- changing search order or proof semantics. This lets experiments inspect
+      -- exactly which rules outrank the desired decomposition.
+      if task.depth == 0 then
+        for choice in ranked.toList.take 20 do
+          setMCtx choice.state
+          let children ← choice.goals.toArray.mapM label
+          let _ ← emit stats task.parent text choice.rule "ranked-root" children choice.declaration choice.score
+          pure ()
+        setMCtx base
       for choice in ranked do
         setMCtx choice.state
         let children ← choice.goals.toArray.mapM label
-        let id ← emit stats task.parent text choice.rule "try" children choice.declaration
+        let id ← emit stats task.parent text choice.rule "try" children choice.declaration choice.score
         let next := choice.goals.map fun g =>
           { goal := g, depth := task.depth + 1, parent := id,
             ancestors := type :: task.ancestors : Task }
