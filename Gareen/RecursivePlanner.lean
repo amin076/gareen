@@ -111,31 +111,42 @@ private partial def search (cfg : Config) (stats : IO.Ref Stats)
           try
             let lemmaExpr ← LibrarySearch.mkLibrarySearchLemma name mod
             let goals ← goal.apply lemmaExpr
-            let childLabels ← goals.toArray.mapM label
-            let mut cost := goals.length * 10
-            if !goals.isEmpty then
+            -- Before ranking, greedily discharge generated premises from the
+            -- local context using Lean's definitional equality. This can also
+            -- instantiate shared metavariables such as the middle witness in a
+            -- transitivity theorem, without any domain-specific theorem names.
+            let mut remaining : List MVarId := []
+            let mut locallyClosed := 0
+            for g in goals do
+              if ← g.isAssigned then
+                locallyClosed := locallyClosed + 1
+              else if ← g.assumptionCore then
+                locallyClosed := locallyClosed + 1
+              else
+                remaining := remaining.concat g
+            let childLabels ← remaining.toArray.mapM label
+            let mut cost := remaining.length * 10
+            if !remaining.isEmpty then
               let largest := childLabels.foldl (fun n s => max n s.length) 0
               if largest >= text.length then cost := cost + 200
             if constructors.any (fun c => c.1 == name) then cost := 5
-            for i in [:goals.length] do
-              let g := goals[i]!
+            for i in [:remaining.length] do
+              let g := remaining[i]!
               let childText := childLabels[i]!
               if !(← g.withContext (isProp (← g.getType))) then
                 cost := cost + 100
-              -- Hierarchical ranking: premises already available locally are
-              -- almost free. A premise that is a literal prefix/subgoal of the
-              -- current goal also represents structural progress. These generic
-              -- signals avoid domain-specific theorem-name templates.
               if localTypes.contains childText then
                 cost := cost / 8
               else if text.startsWith childText then
                 cost := cost / 2
+            if locallyClosed > 0 then
+              cost := cost / (locallyClosed + 1)
             -- Persistent memory is only a weak tie-breaker. Previously halving
             -- the score let a lemma useful in one theorem dominate unrelated
             -- goals and caused search explosions.
             if cfg.preferred.contains name && cost > 0 then cost := cost - 1
             let suffix := match mod with | .none => "" | .mp => ".mp" | .mpr => ".mpr"
-            choices := choices.push { rule := name.toString ++ suffix, goals := goals, state := (← getMCtx), score := cost, declaration := name.toString }
+            choices := choices.push { rule := name.toString ++ suffix, goals := remaining, state := (← getMCtx), score := cost, declaration := name.toString }
           catch _ => pure ()
           setMCtx base
       let ranked := choices.qsort fun a b =>
