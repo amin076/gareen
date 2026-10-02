@@ -79,6 +79,14 @@ def main():
     memory = args.out.with_suffix('.memory.json')
     memory.unlink(missing_ok=True)
     new = RecursiveProofPlanner(timeout_seconds=30, memory_path=memory)
+    # Negative controls are a fast soundness gate, not a theorem-proving
+    # workload. Give them a smaller deterministic search envelope so a known
+    # false statement cannot consume an entire per-goal wall-clock slot.
+    control_memory = args.out.with_suffix('.control-memory.json')
+    control_memory.unlink(missing_ok=True)
+    controls_planner = RecursiveProofPlanner(
+        timeout_seconds=30, max_nodes=400, max_candidates=32,
+        memory_path=control_memory)
     old = LeanProofPlanner(timeout_seconds=30)
     if not new.available():
         print('Lean unavailable: benchmark NOT executed')
@@ -95,7 +103,9 @@ def main():
     def budget(): return max(0, min(args.per_goal, args.seconds - (time.monotonic() - started)))
     # Controls first, so exhaustion cannot skip the soundness checks unnoticed.
     for i, statement in enumerate(FALSE_CONTROLS):
-        r = new.prove(statement, theorem_name=f'false_{i}', wall_clock_budget_seconds=budget())
+        r = controls_planner.prove(
+            statement, theorem_name=f'false_{i}',
+            wall_clock_budget_seconds=budget())
         controls.append(asdict(r)); save()
     for index, (group, name, statement) in enumerate(goals):
         r = new.prove(statement, theorem_name=name, wall_clock_budget_seconds=budget())
@@ -108,10 +118,14 @@ def main():
         rows.append(row); save()
         print(f'{name}: {r.status}, nodes={r.expanded_nodes}', flush=True)
     paired = [r for r in rows if 'phase17' in r]
+    controls_sound = all(r['attempts'] and not r['verified'] for r in controls)
+    controls_terminated = all(r['status'] == 'unproved-in-budget' for r in controls)
     payload['summary'] = {
         'total': len(rows), 'verified': sum(r['recursive']['verified'] for r in rows),
         'attempted': sum(bool(r['recursive']['attempts']) for r in rows),
-        'controls_ok': all(r['attempts'] and not r['verified'] and r['status'] == 'unproved-in-budget' for r in controls),
+        'controls_sound': controls_sound,
+        'controls_terminated': controls_terminated,
+        'controls_ok': controls_sound and controls_terminated,
         'paired': len(paired), 'phase17_verified': sum(r['phase17']['verified'] for r in paired),
         'phase18_paired_verified': sum(r['recursive']['verified'] for r in paired)}
     save()
