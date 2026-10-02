@@ -1070,3 +1070,52 @@ It should not yet be treated as universal evidence of 100% coverage. The next sc
 - and no deletion of failing cases.
 
 The controlled 10/10 result is sufficient evidence to stop repeatedly retuning a single heuristic before that larger validation.
+
+
+---
+
+# Part XVII — First post-benchmark frontier theorem
+
+After the Phase 18.5 portfolio reached 50/50 on the fixed benchmark, the next experiment deliberately moved outside the ladder to a slightly harder natural number-theory theorem:
+
+```text
+∀ n : Nat, Nat.gcd n (n + 1) = 1
+```
+
+This states that every natural number is coprime to its successor.
+
+## Why this theorem was chosen
+
+The fixed benchmark mostly tests direct library facts, divisibility composition, logic/branching, and modest theorem chaining. The new frontier goal changes the shape of the task:
+- target is an exact gcd equality rather than only a divisibility fact,
+- successful search may need to connect gcd, coprimality, divisibility, and addition,
+- the statement was not one of the fixed 50 benchmark goals,
+- it remains moderate enough that failure would be diagnostically useful rather than merely reflecting extreme theorem difficulty.
+
+## Result
+
+The two-engine portfolio verified the theorem successfully.
+
+- Winner: advanced engine
+- Advanced nodes: 147
+- Legacy fallback: not run
+- Proof-search time: about 15.49 seconds
+- Workflow: success
+
+Accepted Mathlib declarations recorded in the proof trace:
+- `Nat.coprime_one_right`
+- `Nat.dvd_refl`
+- `Nat.coprime_add_iff_right`
+
+The exact proof path is therefore not simply the informal human subtraction argument. Gareen found a coprimality/addition route through Mathlib and converted that route into a kernel-verified proof.
+
+## Interpretation
+
+This is an important transfer result, but it is not evidence that Gareen can yet solve broadly difficult number theory. It shows that the Phase 18.5 search architecture can move beyond the fixed benchmark and solve at least one new theorem requiring a different combination of library concepts.
+
+The next frontier tests should increase difficulty gradually and preserve this protocol:
+1. choose a theorem outside the fixed ladder,
+2. explain the mathematical meaning before execution,
+3. run the portfolio without adding theorem-specific hints,
+4. record engine winner, nodes, time, retrieved/accepted declarations, and failure traces,
+5. keep both successful and failed results in this development record.
