@@ -83,3 +83,20 @@ is isolated for each run, but learns between successive Phase 18 goals. Phase
   new. Research-value filtering remains a separate layer.
 - Persistent files are local to an execution workspace; copy them deliberately
   when moving a campaign. Benchmark artifacts are uploaded by GitHub Actions.
+
+
+## Phase 18 search-regression finding
+
+The strongest current Phase 18 run verified 47/50 fixed benchmark goals with all false controls sound and terminating. This improvement exposed an important regression: three goals that had succeeded in earlier Phase 18 runs became unproved after context-aware ranking changes.
+
+A focused probe raised the search envelope to depth 8, 10,000 nodes, 96 candidates, and a shared 20-minute budget. All three still exhausted 10,000 nodes. The search itself used roughly 98 seconds in total. This is evidence of search-direction instability rather than a simple wall-clock shortage.
+
+The current diagnosis is that the local-premise bonus is useful but can over-rank a theorem application that closes one premise while leaving a harder residual obligation. For example, a transitivity route may close `gcd(a,b) ∣ b` immediately yet leave the strategically poor subgoal `b ∣ b+a`, outranking a direct additive decomposition whose two premises are both simple gcd facts.
+
+The next ranking change should therefore preserve the local-premise bonus but add a residual-progress penalty/value estimate. The design and literature review are recorded in `docs/GAREEN_DEVELOPMENT_BOOK.md`.
+
+No search-policy fix for this finding should be considered complete unless it is tested against:
+- the full 50-goal benchmark,
+- the permanent three-goal regression set,
+- node/time cost,
+- and false controls.
