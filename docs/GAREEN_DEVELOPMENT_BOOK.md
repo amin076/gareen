@@ -804,3 +804,191 @@ The next major architectural idea is therefore:
 > Gareen should move from "rank theorem applications" toward "estimate the value of proof states and allocate search resources dynamically."
 
 This is consistent with major directions in modern automated theorem proving, while remaining implementable incrementally and auditable inside Gareen.
+
+
+---
+
+# Part XVI — Phase 18.5: from single-engine tuning to a proof-search portfolio
+
+## Why Phase 18.5 was necessary
+
+Phase 18 reached a strong 47/50 result, but repeated heuristic tuning revealed a structural problem: a ranking change could recover one family of proofs while regressing another family that had previously been solved.
+
+The most important example was the three-goal regression:
+- `composition_01`
+- `composition_04`
+- `logic_and_branching_07`
+
+A context-aware local-premise bonus improved many goals, but it over-ranked transitivity-style branches because one generated premise could close immediately while another sibling premise was strategically poor.
+
+A focused 10,000-node probe confirmed that simply increasing time or nodes did not solve the problem.
+
+## Failed experiment: relation-prefix progress
+
+A first Phase 18.5 attempt tried rewarding residual goals that preserved the same head relation while simplifying the final argument.
+
+This looked plausible but was too syntactic and over-general. It regressed the search from 2/3 recovered goals back to 0/3:
+- `composition_01`: 10,000 nodes, unproved
+- `composition_04`: unproved
+- `logic_and_branching_07`: 10,000 nodes, unproved
+
+Lesson: structural similarity by itself is not a reliable proxy for proof-state value.
+
+## Failed experiment: iterative deepening alone
+
+The next experiment kept the better ranking and added iterative-deepening resource scheduling.
+
+Results:
+- `composition_01`: solved at depth 2, 147 nodes
+- `logic_and_branching_07`: solved at depth 3, 343 nodes
+- `composition_04`: failed at depths 2, 3, 4, 5, and 6, including a 5,000-node attempt
+
+Conclusion: the remaining problem was not only DFS depth commitment. Candidate ordering at shallow depth was still wrong.
+
+## Root-ranking diagnostic
+
+A diagnostic mode recorded the top 20 root candidates and their scores without changing proof semantics.
+
+For `composition_04` before the fix:
+
+```text
+1. Nat.dvd_trans            score 2
+2. Nat.ModEq.dvd_iff.mp     score 10
+3. Nat.ModEq.dvd_iff.mpr    score 10
+4. Nat.dvd_add              score 10
+```
+
+The bad `Nat.dvd_trans` branch created:
+- `gcd(a,b) ∣ b`
+- `b ∣ (a+b)+(b+a)`
+
+The first child was easy, so the local/direct-closure bonuses made the whole branch look excellent even though the second child was strategically poor.
+
+The direct additive decomposition was much better:
+- `gcd(a,b) ∣ a+b`
+- `gcd(a,b) ∣ b+a`
+
+## Successful scoring fix: mixed easy/hard residual penalty
+
+The advanced planner was changed so a state with some directly closable residual goals and some unsupported residual siblings receives a penalty after the direct-closure bonus.
+
+This is generic; it does not hard-code `Nat.dvd_trans` or any gcd theorem.
+
+After the change, the root ranking became:
+
+```text
+1. Nat.dvd_add              score 10
+6. Nat.dvd_trans            score 22
+7. Nat.ModEq.dvd_iff.mp     score 24
+8. Nat.ModEq.dvd_iff.mpr    score 24
+```
+
+The focused three-goal probe then reached 3/3:
+- `composition_01`: 291 nodes
+- `composition_04`: 679 nodes
+- `logic_and_branching_07`: 647 nodes
+
+The permanent Lean regression suite also passed.
+
+## Full benchmark after the fix
+
+The full 50-goal run again verified 47/50. Importantly, the previous three regressions were recovered, including `composition_04` at 343 nodes.
+
+The three positive failures had changed:
+- `logic_and_branching_00`: timeout, 0 search nodes
+- `composition_02`: timeout, 0 search nodes
+- `composition_03`: unproved at 1,200 nodes
+
+False controls remained sound, but one false control timed out before clean search termination:
+- `∀ n : Nat, n + 1 = n`: timeout, 0 search nodes
+
+So the workflow failed because `controls_terminated = false`, not because a false theorem was proved.
+
+This revealed a second tension: the stronger residual lookahead can be expensive before normal search emits nodes.
+
+## Architectural decision: stop forcing one heuristic to dominate every goal
+
+At this point repeated single-engine tuning had produced a cycle:
+
+1. improve one family of goals,
+2. regress another family,
+3. change scoring again,
+4. recover the regression but expose another cost or ranking issue.
+
+The project therefore adopted a new Phase 18.5 architecture:
+
+> Use a portfolio of complementary proof-search engines instead of forcing one ranking policy to be best on every theorem.
+
+The first portfolio contains two engines:
+
+### Engine A — Advanced recursive planner
+
+Uses the latest residual-lookahead and mixed easy/hard penalty.
+
+Strengths demonstrated by experiment:
+- `composition_04`
+- `logic_and_branching_07`
+- many routine/library/composition goals
+
+### Engine B — Frozen legacy recursive planner
+
+A frozen snapshot of the last stable Phase 18 planner before the newer residual-lookahead changes.
+
+The legacy engine is intentionally not tuned further. Its purpose is to preserve a different search bias and act as a regression safety net.
+
+### Cascade policy
+
+```text
+goal
+  -> Advanced engine
+       -> if verified: return proof
+       -> otherwise: Legacy engine
+            -> if verified: return proof
+            -> otherwise: report unproved
+```
+
+This is currently sequential rather than truly parallel so successful advanced proofs avoid unnecessary second-engine cost.
+
+Every accepted proof is still checked by Lean and the same axiom audit. Portfolio fallback changes search strategy, not the trust boundary.
+
+## First five-goal portfolio experiment
+
+A first implementation attempt produced only 3/5 because the frozen legacy module existed but was not exposed through the main Lean foundation, so fallback candidates could not execute correctly. This was an integration failure, not evidence against the portfolio idea.
+
+The legacy module was then imported into `Gareen.lean`, and the five-goal experiment was rerun.
+
+Final five-goal result: **5/5 verified** in about 140.7 seconds of test time.
+
+| Goal | Advanced | Legacy fallback | Winner |
+|---|---|---|---|
+| `logic_and_branching_00` | verified, 49 nodes | not run | advanced |
+| `composition_02` | timeout, 0 nodes | verified, 245 nodes | legacy |
+| `composition_03` | unproved, 1,200 nodes | verified, 245 nodes | legacy |
+| `composition_04` | verified, 343 nodes | not run | advanced |
+| `logic_and_branching_07` | verified, 343 nodes | not run | advanced |
+
+This is the first direct evidence that the two engines are genuinely complementary.
+
+## Phase 18.5 decision
+
+The project will now treat proof search as a portfolio/resource-allocation problem.
+
+Immediate policy:
+- keep the advanced engine,
+- keep a frozen legacy fallback,
+- do not delete failed experiments,
+- preserve all traces and benchmark evidence,
+- prefer small controlled experiments before full 50-goal reruns,
+- only enlarge the benchmark after the portfolio demonstrates reliable cross-coverage.
+
+Longer-term possibilities:
+- best-first engine,
+- iterative-deepening engine,
+- learned state-value engine,
+- adaptive engine selection from goal features,
+- parallel portfolios when compute cost is justified.
+
+The important architectural principle is:
+
+> Different search biases are assets, not necessarily bugs. Gareen should preserve complementary solvers and orchestrate them rather than repeatedly destroying one behavior to optimize another.
+
