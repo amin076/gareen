@@ -96,6 +96,8 @@ class EcosystemStrategyPlanner:
         # classical/arithmetic/search transformations. Each strategy is isolated:
         # a failure cannot corrupt another attempt.
         strategies: list[tuple[str, tuple[str, ...]]] = [
+            ("auto", ("auto",)),
+            ("auto_all_hypotheses", ("auto [*]",)),
             ("grind", ("grind",)),
             ("aesop", ("aesop",)),
             ("exact_grind", ("exact? +grind",)),
@@ -141,6 +143,7 @@ class EcosystemStrategyPlanner:
             raise ValueError(f"Unsafe theorem identifier: {theorem_name!r}")
         lines = [
             "import Mathlib",
+            "import Auto.Tactic",
             "",
             "namespace Gareen.EcosystemGenerated",
             "",
