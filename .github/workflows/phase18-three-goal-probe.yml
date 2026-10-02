@@ -4,6 +4,8 @@ on:
   push:
     branches: [phase18-recursive-proof-planner]
     paths:
+      - "Gareen/RecursivePlanner.lean"
+      - "tests/RecursivePlanner.lean"
       - "experiments/phase18_three_goal_probe.py"
       - ".github/workflows/phase18-three-goal-probe.yml"
 
