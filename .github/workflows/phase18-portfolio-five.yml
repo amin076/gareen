@@ -1,0 +1,48 @@
+name: Phase 18 two-engine portfolio five-goal test
+
+on:
+  push:
+    branches: [phase18-recursive-proof-planner]
+    paths:
+      - "Gareen/RecursivePlannerLegacy.lean"
+      - "Gareen/RecursivePlanner.lean"
+      - "portfolio_proof_planner.py"
+      - "recursive_proof_planner.py"
+      - "experiments/phase18_portfolio_five.py"
+      - ".github/workflows/phase18-portfolio-five.yml"
+
+jobs:
+  portfolio-five:
+    timeout-minutes: 12
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Lean and Mathlib cache
+        uses: leanprover/lean-action@v1
+        with:
+          auto-config: false
+          build: true
+          test: false
+          use-mathlib-cache: true
+          axiom-audit: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run five-goal portfolio test
+        run: python experiments/phase18_portfolio_five.py
+
+      - name: Upload portfolio evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gareen-phase18-portfolio-five
+          path: |
+            .gareen/phase18-portfolio-five*
+            .gareen/planner_candidates/
+          if-no-files-found: warn
+          include-hidden-files: true

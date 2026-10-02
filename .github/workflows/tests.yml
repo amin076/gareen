@@ -40,6 +40,7 @@ jobs:
         run: python experiments/research_value_audit.py
 
   lean-verification:
+    timeout-minutes: 40
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -53,6 +54,9 @@ jobs:
           test: false
           use-mathlib-cache: true
           axiom-audit: true
+
+      - name: Test recursive backtracking in Lean
+        run: lake env lean tests/RecursivePlanner.lean
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -84,3 +88,18 @@ jobs:
             .gareen/gcd-proof-retake.json
             .gareen/gcd-proof-retake.md
           if-no-files-found: warn
+          include-hidden-files: true
+
+      - name: Phase 18.5 two-engine portfolio fixed benchmark
+        run: python experiments/recursive_benchmark.py --seconds 1600 --per-goal 25 --baseline-limit 10
+
+      - name: Upload portfolio benchmark evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gareen-phase18-evidence
+          path: |
+            .gareen/phase18-benchmark*
+            .gareen/planner_candidates/
+          if-no-files-found: warn
+          include-hidden-files: true

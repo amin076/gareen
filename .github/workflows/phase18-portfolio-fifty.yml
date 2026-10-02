@@ -1,0 +1,48 @@
+name: Phase 18.5 official portfolio 50-goal benchmark
+
+on:
+  push:
+    branches: [phase18-recursive-proof-planner]
+    paths:
+      - "experiments/recursive_benchmark.py"
+      - "portfolio_proof_planner.py"
+      - "recursive_proof_planner.py"
+      - "Gareen/RecursivePlanner.lean"
+      - "Gareen/RecursivePlannerLegacy.lean"
+      - ".github/workflows/phase18-portfolio-fifty.yml"
+
+jobs:
+  benchmark:
+    timeout-minutes: 35
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Lean and Mathlib cache
+        uses: leanprover/lean-action@v1
+        with:
+          auto-config: false
+          build: true
+          test: false
+          use-mathlib-cache: true
+          axiom-audit: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run official 50-goal two-engine benchmark
+        run: python experiments/recursive_benchmark.py --seconds 1800 --per-goal 25 --baseline-limit 10
+
+      - name: Upload portfolio benchmark evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gareen-phase18-portfolio-fifty
+          path: |
+            .gareen/phase18-benchmark*
+            .gareen/planner_candidates/
+          if-no-files-found: warn
+          include-hidden-files: true

@@ -1,0 +1,46 @@
+name: Phase 18 focused three-goal probe
+
+on:
+  push:
+    branches: [phase18-recursive-proof-planner]
+    paths:
+      - "Gareen/RecursivePlanner.lean"
+      - "tests/RecursivePlanner.lean"
+      - "experiments/phase18_three_goal_probe.py"
+      - ".github/workflows/phase18-three-goal-probe.yml"
+
+jobs:
+  probe:
+    timeout-minutes: 25
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Lean and Mathlib cache
+        uses: leanprover/lean-action@v1
+        with:
+          auto-config: false
+          build: true
+          test: false
+          use-mathlib-cache: true
+          axiom-audit: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run focused 20-minute probe
+        run: python experiments/phase18_three_goal_probe.py
+
+      - name: Upload focused probe evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gareen-phase18-three-goal-probe
+          path: |
+            .gareen/phase18-three-goal-probe*
+            .gareen/planner_candidates/
+          if-no-files-found: warn
+          include-hidden-files: true

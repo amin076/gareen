@@ -1,0 +1,46 @@
+name: Phase 18.5 root-ranking diagnostic
+
+on:
+  push:
+    branches: [phase18-recursive-proof-planner]
+    paths:
+      - "Gareen/RecursivePlanner.lean"
+      - "recursive_proof_planner.py"
+      - "experiments/phase18_root_ranking_diagnostic.py"
+      - ".github/workflows/phase18-root-ranking.yml"
+
+jobs:
+  diagnostic:
+    timeout-minutes: 12
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Lean and Mathlib cache
+        uses: leanprover/lean-action@v1
+        with:
+          auto-config: false
+          build: true
+          test: false
+          use-mathlib-cache: true
+          axiom-audit: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Inspect root ranking
+        run: python experiments/phase18_root_ranking_diagnostic.py
+
+      - name: Upload diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gareen-phase18-root-ranking
+          path: |
+            .gareen/phase18-root-ranking*
+            .gareen/planner_candidates/
+          if-no-files-found: warn
+          include-hidden-files: true

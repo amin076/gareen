@@ -1,0 +1,251 @@
+import Mathlib
+import Lean.Meta.Tactic.LibrarySearch
+
+/-! Bounded, ranked backward search. All applications and substitutions are performed by
+Lean's elaborator. Failed branches restore their entire metavariable context. No domain
+lemma names or arithmetic decomposition templates occur in this module. -/
+open Lean Meta Elab Tactic
+
+namespace Gareen.RecursivePlanner
+
+structure Config where
+  maxDepth : Nat := 6
+  maxNodes : Nat := 600
+  maxCandidates : Nat := 48
+  preferred : Array Name := #[]
+
+structure Event where
+  id : Nat
+  parent : Nat
+  goal : String
+  rule : String
+  status : String
+  children : Array String := #[]
+  declaration : String := ""
+  score : Nat := 0
+  deriving ToJson
+
+structure Stats where
+  nodes : Nat := 0
+  events : Array Event := #[]
+
+structure Task where
+  goal : MVarId
+  depth : Nat
+  parent : Nat
+  ancestors : List Expr := []
+
+structure Choice where
+  rule : String
+  goals : List MVarId
+  state : MetavarContext
+  score : Nat
+  declaration : String := ""
+
+private def emit (stats : IO.Ref Stats) (parent : Nat) (goal rule status : String)
+    (children : Array String := #[]) (declaration : String := "") (score : Nat := 0) : MetaM Nat := do
+  let s ← stats.get
+  let id := s.events.size + 1
+  stats.set { s with events := s.events.push { id, parent, goal, rule, status, children, declaration, score } }
+  return id
+
+private def label (g : MVarId) : MetaM String := g.withContext do
+  return (← ppExpr (← instantiateMVars (← g.getType))).pretty
+
+/-- Cheap progress signal: can this residual goal be closed immediately by a
+retrieved library declaration with no further proof obligations? The check is
+bounded and restores the metavariable context after every probe, so it is a
+ranking hint rather than an unverified proof shortcut. -/
+private def hasDirectLibraryProof (g : MVarId) (limit : Nat := 12) : MetaM Bool :=
+  g.withContext do
+    let base ← getMCtx
+    let type ← instantiateMVars (← g.getType)
+    let indexed ← LibrarySearch.libSearchFindDecls type
+    for (name, mod) in indexed.toList.take limit do
+      try
+        let lemmaExpr ← LibrarySearch.mkLibrarySearchLemma name mod
+        let subgoals ← g.apply lemmaExpr
+        let mut allClosed := true
+        for h in subgoals do
+          if !(← h.isAssigned) then
+            allClosed := false
+        setMCtx base
+        if allClosed then return true
+      catch _ =>
+        setMCtx base
+    setMCtx base
+    return false
+
+/-- Search the whole pending agenda under each choice: a later sibling can force
+backtracking into an earlier sibling, including shared implicit witnesses. -/
+private partial def search (cfg : Config) (stats : IO.Ref Stats)
+    (pending : List Task) : MetaM Bool := do
+  match pending with
+  | [] => return true
+  | task :: rest =>
+    if ← task.goal.isAssigned then return ← search cfg stats rest
+    if (← stats.get).nodes >= cfg.maxNodes then return false
+    stats.modify fun s => { s with nodes := s.nodes + 1 }
+    let (_, goal) ← task.goal.intros
+    goal.withContext do
+      let type ← instantiateMVars (← goal.getType)
+      let text ← label goal
+      if task.depth > cfg.maxDepth then
+        let _ ← emit stats task.parent text "" "depth-limit"
+        return false
+      if task.ancestors.contains type then
+        let _ ← emit stats task.parent text "" "cycle"
+        return false
+      let base ← getMCtx
+      -- Cache printed local proposition types for ranking. A retrieved rule whose
+      -- premises are already present in the local context should outrank a rule
+      -- that opens a large unrelated search branch.
+      let mut localTypes : Array String := #[]
+      for decl in ← getLCtx do
+        if decl.isImplementationDetail then continue
+        try
+          let localType ← instantiateMVars (← inferType decl.toExpr)
+          localTypes := localTypes.push (← ppExpr localType).pretty
+        catch _ => pure ()
+      -- Local assumptions are candidates too; their conclusions need not be ground.
+      let mut choices : Array Choice := #[]
+      for decl in ← getLCtx do
+        if decl.isImplementationDetail then continue
+        try
+          let goals ← goal.apply decl.toExpr
+          choices := choices.push { rule := decl.userName.toString, goals := goals, state := (← getMCtx), score := goals.length }
+        catch _ => pure ()
+        setMCtx base
+      try
+        goal.refl
+        choices := choices.push { rule := "rfl", goals := [], state := (← getMCtx), score := 0 }
+      catch _ => pure ()
+      setMCtx base
+      if task.depth < cfg.maxDepth then
+        let indexed ← LibrarySearch.libSearchFindDecls type
+        -- Constructors are a generic source of introductions, including witnesses.
+        let constructors : Array (Name × LibrarySearch.DeclMod) := match (← getEnv).find? (type.getAppFn.constName?.getD .anonymous) with
+          | some (.inductInfo info) => info.ctors.toArray.map (fun n => (n, .none))
+          | _ => #[]
+        let candidates := constructors ++ indexed
+        let candidates := candidates.filter (fun c => cfg.preferred.contains c.1) ++
+          candidates.filter (fun c => !cfg.preferred.contains c.1)
+        for (name, mod) in candidates.toList.take cfg.maxCandidates do
+          if (← stats.get).nodes >= cfg.maxNodes then break
+          stats.modify fun s => { s with nodes := s.nodes + 1 }
+          try
+            let lemmaExpr ← LibrarySearch.mkLibrarySearchLemma name mod
+            let goals ← goal.apply lemmaExpr
+            -- Before ranking, greedily discharge generated premises from the
+            -- local context using Lean's definitional equality. This can also
+            -- instantiate shared metavariables such as the middle witness in a
+            -- transitivity theorem, without any domain-specific theorem names.
+            let mut remaining : List MVarId := []
+            let mut locallyClosed := 0
+            for g in goals do
+              if ← g.isAssigned then
+                locallyClosed := locallyClosed + 1
+              else if ← g.assumptionCore then
+                locallyClosed := locallyClosed + 1
+              else
+                remaining := remaining.concat g
+            let childLabels ← remaining.toArray.mapM label
+            let mut cost := remaining.length * 10
+            if !remaining.isEmpty then
+              let largest := childLabels.foldl (fun n s => max n s.length) 0
+              if largest >= text.length then cost := cost + 200
+            if constructors.any (fun c => c.1 == name) then cost := 5
+            let mut directClosures := 0
+            for i in [:remaining.length] do
+              let g := remaining[i]!
+              let childText := childLabels[i]!
+              if !(← g.withContext (isProp (← g.getType))) then
+                cost := cost + 100
+              if localTypes.contains childText then
+                cost := cost / 8
+              else if text.startsWith childText then
+                cost := cost / 2
+              -- Residual-progress signal. A branch whose remaining obligations
+              -- are themselves one library step from closure should outrank a
+              -- branch that merely closed one easy premise but left a harder,
+              -- unsupported obligation.
+              if ← hasDirectLibraryProof g then
+                directClosures := directClosures + 1
+            if directClosures > 0 then
+              cost := cost / (1 + 3 * directClosures)
+            -- A direct-closure bonus must not hide a hard sibling. The previous
+            -- scoring could make a transitivity branch look excellent because one
+            -- residual goal closed immediately while another unsupported residual
+            -- goal consumed the whole DFS budget. Penalize that mixed state after
+            -- the bonus has been applied, so uniformly easy decompositions still
+            -- benefit while "one easy + one hard" branches are deprioritized.
+            let unsupported := remaining.length - directClosures
+            if directClosures > 0 && unsupported > 0 then
+              cost := cost + 40 * unsupported
+            if locallyClosed > 0 then
+              cost := cost / (locallyClosed + 1)
+            -- If some premises closed locally but none of the residual goals has
+            -- an immediate library proof, do not let the local-closure bonus by
+            -- itself dominate genuinely progressive alternatives.
+            if locallyClosed > 0 && !remaining.isEmpty && directClosures == 0 then
+              cost := cost + 25 * remaining.length
+            -- Persistent memory is only a weak tie-breaker. Previously halving
+            -- the score let a lemma useful in one theorem dominate unrelated
+            -- goals and caused search explosions.
+            if cfg.preferred.contains name && cost > 0 then cost := cost - 1
+            let suffix := match mod with | .none => "" | .mp => ".mp" | .mpr => ".mpr"
+            choices := choices.push { rule := name.toString ++ suffix, goals := remaining, state := (← getMCtx), score := cost, declaration := name.toString }
+          catch _ => pure ()
+          setMCtx base
+      let ranked := choices.qsort fun a b =>
+        if a.score == b.score then a.rule < b.rule else a.score < b.score
+      -- Diagnostic only: record the top-ranked root alternatives without
+      -- changing search order or proof semantics. This lets experiments inspect
+      -- exactly which rules outrank the desired decomposition.
+      if task.depth == 0 then
+        for choice in ranked.toList.take 20 do
+          setMCtx choice.state
+          let children ← choice.goals.toArray.mapM label
+          let _ ← emit stats task.parent text choice.rule "ranked-root" children choice.declaration choice.score
+          pure ()
+        setMCtx base
+      for choice in ranked do
+        setMCtx choice.state
+        let children ← choice.goals.toArray.mapM label
+        let id ← emit stats task.parent text choice.rule "try" children choice.declaration choice.score
+        let next := choice.goals.map fun g =>
+          { goal := g, depth := task.depth + 1, parent := id,
+            ancestors := type :: task.ancestors : Task }
+        if ← search cfg stats (next ++ rest) then
+          let _ ← emit stats id text choice.rule "accepted" #[] choice.declaration
+          return true
+        let _ ← emit stats id text choice.rule "backtrack"
+        setMCtx base
+      let _ ← emit stats task.parent text "" "unproved"
+      return false
+
+syntax (name := gareenSearch) "gareen_search" num num num (" [" ident,* "]")? : tactic
+
+elab_rules : tactic
+  | `(tactic| gareen_search $depth:num $nodes:num $width:num $[[$names:ident,*]]?) => do
+    let goal ← getMainGoal
+    let before ← saveState
+    let stats ← IO.mkRef ({} : Stats)
+    let preferred := (names.map (·.getElems.map (·.getId))).getD #[]
+    let cfg : Config := { maxDepth := depth.getNat, maxNodes := nodes.getNat, maxCandidates := width.getNat, preferred := preferred }
+    let success ← search cfg stats [{ goal := goal, depth := 0, parent := 0 }]
+    let data ← stats.get
+    if !success then before.restore
+    for event in data.events do
+      logInfo m!"GAREEN_EVENT {toJson event |>.compress}"
+    logInfo m!"GAREEN_NODES {data.nodes}"
+    if !success then
+      throwError "Gareen bounded recursive search exhausted; goal is unproved, not false"
+    let proof ← instantiateMVars (mkMVar goal)
+    if proof.hasMVar || proof.hasSorry then
+      before.restore
+      throwError "Gareen refuses incomplete or sorry-containing proof"
+    logInfo m!"GAREEN_PROOF {← ppExpr proof}"
+    replaceMainGoal []
+
+end Gareen.RecursivePlanner
