@@ -5,6 +5,7 @@ on:
     branches: [phase19-ecosystem-strategies]
     paths:
       - "lakefile.toml"
+      - "lake-manifest.json"
       - "ecosystem_strategy_planner.py"
       - "experiments/phase19_lean_auto_validation.py"
       - ".github/workflows/phase19-lean-auto-validation.yml"
