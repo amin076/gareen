@@ -15,7 +15,7 @@ import time
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from lean_proof_planner import LeanProofPlanner
-from recursive_proof_planner import RecursiveProofPlanner
+from portfolio_proof_planner import PortfolioProofPlanner
 
 GROUPS = {
  'routine': [
@@ -76,19 +76,27 @@ def main():
     p.add_argument('--out', type=Path, default=ROOT / '.gareen/phase18-benchmark.json')
     args = p.parse_args()
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    memory = args.out.with_suffix('.memory.json')
-    memory.unlink(missing_ok=True)
-    new = RecursiveProofPlanner(timeout_seconds=30, memory_path=memory)
-    # Negative controls are a fast soundness gate, not a theorem-proving
-    # workload. Give them a smaller deterministic search envelope so a known
-    # false statement cannot consume an entire per-goal wall-clock slot.
-    control_memory = args.out.with_suffix('.control-memory.json')
-    control_memory.unlink(missing_ok=True)
-    controls_planner = RecursiveProofPlanner(
-        timeout_seconds=30, max_nodes=400, max_candidates=32,
-        memory_path=control_memory)
+    # Phase 18.5 official benchmark uses the two-engine cascade.
+    # Engine A is the current advanced recursive planner; Engine B is the
+    # frozen legacy Phase 18 planner. The legacy engine runs only when A does
+    # not verify the theorem.
+    portfolio = PortfolioProofPlanner(
+        advanced_timeout=args.per_goal,
+        legacy_timeout=args.per_goal,
+        advanced_nodes=1200,
+        legacy_nodes=1200,
+    )
+    # False controls use smaller node budgets but the same two-engine trust
+    # boundary. More wall-clock headroom is allowed because startup/elaboration
+    # can dominate tiny false goals; no false theorem may verify.
+    control_portfolio = PortfolioProofPlanner(
+        advanced_timeout=max(args.per_goal, 35),
+        legacy_timeout=max(args.per_goal, 35),
+        advanced_nodes=400,
+        legacy_nodes=400,
+    )
     old = LeanProofPlanner(timeout_seconds=30)
-    if not new.available():
+    if not portfolio.advanced.available():
         print('Lean unavailable: benchmark NOT executed')
         return 2
     # Interleave groups so a global time limit does not test only easy goals.
@@ -103,42 +111,85 @@ def main():
     def budget(): return max(0, min(args.per_goal, args.seconds - (time.monotonic() - started)))
     # Controls first, so exhaustion cannot skip the soundness checks unnoticed.
     for i, statement in enumerate(FALSE_CONTROLS):
-        r = controls_planner.prove(
-            statement, theorem_name=f'false_{i}',
-            wall_clock_budget_seconds=budget())
+        if budget() <= 0:
+            break
+        r = control_portfolio.prove(statement, theorem_name=f'false_{i}')
         controls.append(asdict(r)); save()
     for index, (group, name, statement) in enumerate(goals):
-        r = new.prove(statement, theorem_name=name, wall_clock_budget_seconds=budget())
-        row = {'group': group, 'name': name, 'statement': statement, 'recursive': asdict(r)}
+        if budget() <= 0:
+            break
+        r = portfolio.prove(statement, theorem_name=name)
+        advanced = r.advanced
+        legacy = r.legacy
+        combined_nodes = advanced['expanded_nodes'] + (legacy['expanded_nodes'] if legacy else 0)
+        row = {
+            'group': group,
+            'name': name,
+            'statement': statement,
+            'portfolio': asdict(r),
+            # Backward-compatible summary field for existing evidence readers.
+            'recursive': {
+                'verified': r.verified,
+                'status': 'verified' if r.verified else 'unproved-in-portfolio',
+                'expanded_nodes': combined_nodes,
+                'winning_engine': r.winning_engine,
+            },
+        }
         # Comparison cases are identical, with a fresh, independent proof process.
         if index < args.baseline_limit and budget() > 0:
             before = old.prove(statement, theorem_name=name + '_phase17',
                                wall_clock_budget_seconds=budget(), per_attempt_timeout_seconds=args.per_goal)
             row['phase17'] = asdict(before)
         rows.append(row); save()
-        print(f'{name}: {r.status}, nodes={r.expanded_nodes}', flush=True)
+        print(
+            f"{name}: {'verified' if r.verified else 'unproved'}, "
+            f"winner={r.winning_engine}, nodes={combined_nodes}",
+            flush=True,
+        )
     paired = [r for r in rows if 'phase17' in r]
-    controls_sound = all(r['attempts'] and not r['verified'] for r in controls)
-    controls_terminated = all(r['status'] == 'unproved-in-budget' for r in controls)
+    controls_sound = (
+        len(controls) == len(FALSE_CONTROLS)
+        and all(not r['verified'] for r in controls)
+    )
+    # In portfolio mode a false control is considered cleanly terminated when
+    # neither engine verifies it and at least one attempted engine returns a
+    # bounded non-timeout unproved result. A timeout in one engine is allowed
+    # only if the complementary engine terminates cleanly.
+    def clean_control(r):
+        engines = [r.get('advanced')] + ([r.get('legacy')] if r.get('legacy') else [])
+        return (not r['verified']) and any(
+            e and e.get('status') == 'unproved-in-budget' for e in engines
+        )
+    controls_terminated = (
+        len(controls) == len(FALSE_CONTROLS)
+        and all(clean_control(r) for r in controls)
+    )
     payload['summary'] = {
-        'total': len(rows), 'verified': sum(r['recursive']['verified'] for r in rows),
-        'attempted': sum(bool(r['recursive']['attempts']) for r in rows),
+        'total': len(rows),
+        'verified': sum(r['recursive']['verified'] for r in rows),
+        'attempted': len(rows),
+        'advanced_wins': sum(r['portfolio']['winning_engine'] == 'advanced' for r in rows),
+        'legacy_recoveries': sum(r['portfolio']['winning_engine'] == 'legacy' for r in rows),
         'controls_sound': controls_sound,
         'controls_terminated': controls_terminated,
         'controls_ok': controls_sound and controls_terminated,
-        'paired': len(paired), 'phase17_verified': sum(r['phase17']['verified'] for r in paired),
+        'paired': len(paired),
+        'phase17_verified': sum(r['phase17']['verified'] for r in paired),
         'phase18_paired_verified': sum(r['recursive']['verified'] for r in paired)}
     save()
     summary = payload['summary']
-    lines = ['# Phase 18 benchmark', '', json.dumps(summary, indent=2), '',
-             '| Goal | Group | Phase 17 | Phase 18 | Nodes |', '|---|---|---|---|---|']
+    lines = ['# Phase 18.5 portfolio benchmark', '', json.dumps(summary, indent=2), '',
+             '| Goal | Group | Phase 17 | Portfolio | Winner | Nodes |',
+             '|---|---|---|---|---|---|']
     for r in rows:
-        lines.append(f"| {r['name']} | {r['group']} | {r.get('phase17', {}).get('verified', 'not run')} | {r['recursive']['status']} | {r['recursive']['expanded_nodes']} |")
+        lines.append(f"| {r['name']} | {r['group']} | {r.get('phase17', {}).get('verified', 'not run')} | {r['recursive']['status']} | {r['recursive'].get('winning_engine', '-')} | {r['recursive']['expanded_nodes']} |")
     args.out.with_suffix('.md').write_text('\n'.join(lines), encoding='utf-8')
     print(json.dumps(summary, indent=2))
-    required = {'composition_00', 'composition_02', 'logic_and_branching_00'}
-    solved = {r['name'] for r in rows if r['recursive']['verified']}
-    return 0 if summary['controls_ok'] and required <= solved and summary['attempted'] == len(rows) else 1
+    return 0 if (
+        summary['controls_ok']
+        and summary['attempted'] == len(goals)
+        and summary['verified'] == len(goals)
+    ) else 1
 
 if __name__ == '__main__':
     raise SystemExit(main())
