@@ -1,0 +1,46 @@
+name: Phase 19 five-hour Euclid stress test
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [phase19-ecosystem-strategies]
+    paths:
+      - "experiments/phase19_five_hour_euclid.py"
+      - ".github/workflows/phase19-five-hour-euclid.yml"
+
+jobs:
+  five-hour-euclid:
+    timeout-minutes: 300
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Lean and Mathlib cache
+        uses: leanprover/lean-action@v1
+        with:
+          auto-config: false
+          build: true
+          test: false
+          use-mathlib-cache: true
+          axiom-audit: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run long-horizon theorem stress test
+        run: python experiments/phase19_five_hour_euclid.py
+
+      - name: Upload long-horizon evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gareen-phase19-five-hour-euclid
+          path: |
+            .gareen/phase19-five-hour-euclid*
+            .gareen/ecosystem_candidates/
+            .gareen/planner_candidates/
+          if-no-files-found: warn
+          include-hidden-files: true
