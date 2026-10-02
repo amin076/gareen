@@ -44,8 +44,8 @@ def main() -> int:
     (ROOT / ".gareen/portfolio-advanced-memory.json").unlink(missing_ok=True)
 
     planner = PortfolioProofPlanner(
-        advanced_timeout=18,
-        legacy_timeout=18,
+        advanced_timeout=25,
+        legacy_timeout=25,
         advanced_nodes=1200,
         legacy_nodes=1200,
     )
