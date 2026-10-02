@@ -100,3 +100,30 @@ No search-policy fix for this finding should be considered complete unless it is
 - the permanent three-goal regression set,
 - node/time cost,
 - and false controls.
+
+
+## Phase 18.5 portfolio architecture
+
+Repeated ranking changes showed that one search policy can solve goals another policy misses. Instead of continuing to force one heuristic to dominate all theorem shapes, Gareen now has a two-engine cascade:
+
+1. **Advanced recursive planner** — latest residual-lookahead and mixed easy/hard residual scoring.
+2. **Frozen legacy recursive planner** — snapshot of the earlier stable Phase 18 search policy.
+
+The portfolio first tries the advanced engine. If it does not return a verified proof, the legacy engine receives the same statement. Accepted proofs from either engine remain subject to Lean kernel verification and axiom audit.
+
+### Evidence
+
+A five-goal smoke test first failed 3/5 because the frozen legacy module had not been imported through the main Lean foundation. After fixing that integration issue, the rerun reached **5/5**:
+- advanced: `logic_and_branching_00`, `composition_04`, `logic_and_branching_07`
+- legacy fallback: `composition_02`, `composition_03`
+
+A controlled ten-goal test then exposed an overly strict 18-second per-engine timeout: 9/10 attempts timed out, mostly before emitting search nodes. This was a resource-envelope failure, not a proof-search regression.
+
+The same ten-goal set was rerun with a 25-second per-engine budget and a 10-minute workflow cap. Result: **10/10 verified in ~188.8 seconds**:
+- 8 advanced-engine wins
+- 2 legacy recoveries
+- `composition_02` and `composition_03` were both recovered by legacy at 245 nodes after the advanced engine exhausted 1,200 nodes.
+
+This is the strongest current evidence that the engines are complementary and that portfolio search is a more stable architectural direction than repeated single-heuristic retuning.
+
+All successful and failed Phase 18.5 experiments, including the relation-prefix regression, iterative-deepening probe, root-ranking diagnostic, mixed-residual scoring fix, five-goal portfolio integration failure, and both ten-goal runs, are recorded in `docs/GAREEN_DEVELOPMENT_BOOK.md`.
