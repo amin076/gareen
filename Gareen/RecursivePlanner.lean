@@ -51,6 +51,27 @@ private def emit (stats : IO.Ref Stats) (parent : Nat) (goal rule status : Strin
 private def label (g : MVarId) : MetaM String := g.withContext do
   return (← ppExpr (← instantiateMVars (← g.getType))).pretty
 
+/-- Cheap progress signal: can this residual goal be closed immediately by a
+retrieved library declaration with no further proof obligations? The check is
+bounded and restores the metavariable context after every probe, so it is a
+ranking hint rather than an unverified proof shortcut. -/
+private def hasDirectLibraryProof (g : MVarId) (limit : Nat := 12) : MetaM Bool :=
+  g.withContext do
+    let base ← getMCtx
+    let type ← instantiateMVars (← g.getType)
+    let indexed ← LibrarySearch.libSearchFindDecls type
+    for (name, mod) in indexed.toList.take limit do
+      try
+        let lemmaExpr ← LibrarySearch.mkLibrarySearchLemma name mod
+        let subgoals ← g.apply lemmaExpr
+        let closed := subgoals.allM (fun h => h.isAssigned)
+        setMCtx base
+        if closed then return true
+      catch _ =>
+        setMCtx base
+    setMCtx base
+    return false
+
 /-- Search the whole pending agenda under each choice: a later sibling can force
 backtracking into an earlier sibling, including shared implicit witnesses. -/
 private partial def search (cfg : Config) (stats : IO.Ref Stats)
@@ -130,6 +151,7 @@ private partial def search (cfg : Config) (stats : IO.Ref Stats)
               let largest := childLabels.foldl (fun n s => max n s.length) 0
               if largest >= text.length then cost := cost + 200
             if constructors.any (fun c => c.1 == name) then cost := 5
+            let mut directClosures := 0
             for i in [:remaining.length] do
               let g := remaining[i]!
               let childText := childLabels[i]!
@@ -139,8 +161,21 @@ private partial def search (cfg : Config) (stats : IO.Ref Stats)
                 cost := cost / 8
               else if text.startsWith childText then
                 cost := cost / 2
+              -- Residual-progress signal. A branch whose remaining obligations
+              -- are themselves one library step from closure should outrank a
+              -- branch that merely closed one easy premise but left a harder,
+              -- unsupported obligation.
+              if ← hasDirectLibraryProof g then
+                directClosures := directClosures + 1
+            if directClosures > 0 then
+              cost := cost / (1 + 3 * directClosures)
             if locallyClosed > 0 then
               cost := cost / (locallyClosed + 1)
+            -- If some premises closed locally but none of the residual goals has
+            -- an immediate library proof, do not let the local-closure bonus by
+            -- itself dominate genuinely progressive alternatives.
+            if locallyClosed > 0 && !remaining.isEmpty && directClosures == 0 then
+              cost := cost + 25 * remaining.length
             -- Persistent memory is only a weak tie-breaker. Previously halving
             -- the score let a lemma useful in one theorem dominate unrelated
             -- goals and caused search explosions.
