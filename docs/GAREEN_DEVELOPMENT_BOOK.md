@@ -1282,3 +1282,58 @@ Later Phase 19 work may add:
 
 But those features should reuse existing theory/prover infrastructure wherever
 possible rather than recreating it from scratch.
+
+
+## Phase 19 diagnostic: five medium theorems
+
+Because the first ecosystem-first hard theorem test failed, a separate diagnostic
+was run to check whether the new strategy layer was functioning at all or
+whether the negative result reflected an integration bug.
+
+The diagnostic deliberately disabled Gareen's recursive fallback and tested
+five medium theorems from different proof domains.
+
+Results:
+
+| Goal | Result | Ecosystem winner |
+|---|---|---|
+| monotone addition over Nat | verified | `grind` |
+| quadratic ring identity over Int | verified | `grind` |
+| `gcd n (n+1) = 1` | verified | `aesop` |
+| common divisor divides a sum | unproved | none |
+| propositional implication chain | verified | `grind` |
+
+Overall result: **4/5 verified** by the ecosystem layer alone.
+
+The four successful goals closed quickly:
+- arithmetic: ~4.97s
+- ring identity: ~4.95s
+- consecutive gcd: ~9.92s
+- logic chain: ~4.96s
+
+The failed divisibility theorem was:
+
+```text
+∀ d a b : Nat, d ∣ a → d ∣ b → d ∣ a + b
+```
+
+This theorem is important diagnostically because Gareen's recursive planner had
+already solved the same shape in the official Phase 18.5 benchmark. Therefore
+the 4/5 result does **not** indicate that the ecosystem integration is broken.
+It demonstrates complementarity: native automation is extremely effective on
+several domains, while generic premise retrieval/composition can still miss a
+simple library theorem under the current search envelope.
+
+For the divisibility theorem:
+- `grind` failed quickly,
+- `aesop` failed quickly,
+- `exact? +grind`, `apply? +grind`, `exact?`, and `apply?` each hit the
+  bounded retrieval timeout,
+- arithmetic/contradiction/induction-style tactics were not appropriate.
+
+This experiment strengthens the Phase 19 architecture decision: Gareen should
+orchestrate **complementary** existing solvers and its own verified recursive
+search rather than assume one tactic family is universally stronger.
+
+It also identifies premise selection as a major remaining gap and provides a
+concrete reason to evaluate Hammer/ATP/retrieval systems next.
