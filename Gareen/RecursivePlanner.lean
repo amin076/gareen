@@ -64,9 +64,12 @@ private def hasDirectLibraryProof (g : MVarId) (limit : Nat := 12) : MetaM Bool 
       try
         let lemmaExpr ← LibrarySearch.mkLibrarySearchLemma name mod
         let subgoals ← g.apply lemmaExpr
-        let closed := subgoals.allM (fun h => h.isAssigned)
+        let mut allClosed := true
+        for h in subgoals do
+          if !(← h.isAssigned) then
+            allClosed := false
         setMCtx base
-        if closed == true then return true
+        if allClosed then return true
       catch _ =>
         setMCtx base
     setMCtx base
