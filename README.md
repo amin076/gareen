@@ -1,5 +1,7 @@
 # Gareen
 
+> Long-form project history, experiments, failures, lessons, and proof-search research: [`docs/GAREEN_DEVELOPMENT_BOOK.md`](docs/GAREEN_DEVELOPMENT_BOOK.md)
+
 Gareen is a research project for exploring whether a machine can grow useful formal mathematical knowledge with minimal human guidance.
 
 **Architecture V2 changes the trust boundary.** Gareen no longer aims to grow its Python proof checker into a competing proof assistant. Lean 4 + Mathlib are now the trusted formal foundation for serious mathematical research, while Python remains the research/orchestration layer for conjecture generation, strategy selection, memory, ranking, and future concept invention.
