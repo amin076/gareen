@@ -1024,3 +1024,49 @@ A per-engine wall-clock limit must leave room for Lean process startup, imports,
 
 The ten-goal test was therefore rerun with the same 25-second per-engine envelope that had produced the successful five-goal result. The workflow itself remains capped at 10 minutes.
 
+
+
+### Second ten-goal attempt: successful
+
+The rerun restored a realistic 25-second per-engine budget while retaining the 10-minute workflow cap.
+
+Result: **10/10 verified**.
+
+- Advanced wins: 8
+- Legacy recoveries: 2
+- Test elapsed time: about 188.8 seconds (~3m 9s)
+
+Detailed results:
+
+| Goal | Advanced | Legacy fallback | Winner |
+|---|---|---|---|
+| `logic_and_branching_00` | verified, 49 nodes | not run | advanced |
+| `composition_02` | unproved, 1,200 nodes | verified, 245 nodes | legacy |
+| `composition_03` | unproved, 1,200 nodes | verified, 245 nodes | legacy |
+| `composition_04` | verified, 343 nodes | not run | advanced |
+| `logic_and_branching_07` | verified, 343 nodes | not run | advanced |
+| `routine_07` | verified, 49 nodes | not run | advanced |
+| `library_06` | verified, 49 nodes | not run | advanced |
+| `composition_09` | verified, 245 nodes | not run | advanced |
+| `logic_and_branching_08` | verified, 98 nodes | not run | advanced |
+| `challenge_07` | verified, 98 nodes | not run | advanced |
+
+This validates the main portfolio hypothesis on a controlled mixed set:
+- the advanced engine retains its new strengths,
+- the frozen legacy engine recovers goals the advanced engine still misses,
+- the cascade avoids legacy cost when the advanced engine succeeds,
+- the combined solver achieves coverage neither engine demonstrated alone on this set.
+
+### Architectural status after the ten-goal test
+
+The two-engine portfolio is now the preferred Phase 18.5 direction.
+
+It should not yet be treated as universal evidence of 100% coverage. The next scale-up, if needed, is the fixed 50-goal benchmark with:
+- the same two-engine cascade,
+- explicit false controls,
+- per-engine timing,
+- recovery attribution,
+- total wall-clock cost,
+- and no deletion of failing cases.
+
+The controlled 10/10 result is sufficient evidence to stop repeatedly retuning a single heuristic before that larger validation.
