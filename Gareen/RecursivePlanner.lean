@@ -55,6 +55,21 @@ private def label (g : MVarId) : MetaM String := g.withContext do
 retrieved library declaration with no further proof obligations? The check is
 bounded and restores the metavariable context after every probe, so it is a
 ranking hint rather than an unverified proof shortcut. -/
+/-- Generic structural-progress signal. For proposition applications with the
+same head, reward residual goals that preserve every argument except the final
+one. This captures decomposition such as R d (x+y) -> R d x, R d y without
+hard-coding any arithmetic relation or theorem name. -/
+private def preservesRelationPrefix (parent child : Expr) : MetaM Bool := do
+  let p ← instantiateMVars parent
+  let q ← instantiateMVars child
+  if p.getAppFn != q.getAppFn then return false
+  let pa := p.getAppArgs
+  let qa := q.getAppArgs
+  if pa.size != qa.size || pa.size < 2 then return false
+  for i in [:pa.size - 1] do
+    if pa[i]! != qa[i]! then return false
+  return true
+
 private def hasDirectLibraryProof (g : MVarId) (limit : Nat := 12) : MetaM Bool :=
   g.withContext do
     let base ← getMCtx
@@ -170,6 +185,13 @@ private partial def search (cfg : Config) (stats : IO.Ref Stats)
               -- unsupported obligation.
               if ← hasDirectLibraryProof g then
                 directClosures := directClosures + 1
+              let childType ← g.withContext (instantiateMVars (← g.getType))
+              if ← preservesRelationPrefix type childType then
+                -- Structural decomposition is genuine progress when the same
+                -- relation and leading arguments are preserved while only the
+                -- final target term is simplified. This prevents a transitivity
+                -- step from looking better merely because one premise closed.
+                cost := cost / 4
             if directClosures > 0 then
               cost := cost / (1 + 3 * directClosures)
             if locallyClosed > 0 then
