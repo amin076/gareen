@@ -1,0 +1,38 @@
+name: Phase 19 refresh lake manifest
+
+on:
+  push:
+    branches: [phase19-ecosystem-strategies]
+    paths:
+      - ".github/workflows/phase19-refresh-manifest.yml"
+      - "lakefile.toml"
+  workflow_dispatch:
+
+jobs:
+  refresh-manifest:
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Lean only
+        uses: leanprover/lean-action@v1
+        with:
+          auto-config: false
+          build: false
+          test: false
+          use-mathlib-cache: false
+          axiom-audit: false
+
+      - name: Refresh auto dependency in manifest
+        run: |
+          lake update auto
+          test -f lake-manifest.json
+          grep -n '"name": "auto"' lake-manifest.json
+
+      - name: Upload refreshed manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: gareen-phase19-refreshed-manifest
+          path: lake-manifest.json
