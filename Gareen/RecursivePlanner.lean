@@ -51,10 +51,6 @@ private def emit (stats : IO.Ref Stats) (parent : Nat) (goal rule status : Strin
 private def label (g : MVarId) : MetaM String := g.withContext do
   return (← ppExpr (← instantiateMVars (← g.getType))).pretty
 
-/-- Cheap progress signal: can this residual goal be closed immediately by a
-retrieved library declaration with no further proof obligations? The check is
-bounded and restores the metavariable context after every probe, so it is a
-ranking hint rather than an unverified proof shortcut. -/
 /-- Generic structural-progress signal. For proposition applications with the
 same head, reward residual goals that preserve every argument except the final
 one. This captures decomposition such as R d (x+y) -> R d x, R d y without
@@ -70,6 +66,10 @@ private def preservesRelationPrefix (parent child : Expr) : MetaM Bool := do
     if pa[i]! != qa[i]! then return false
   return true
 
+/-- Cheap progress signal: can this residual goal be closed immediately by a
+retrieved library declaration with no further proof obligations? The check is
+bounded and restores the metavariable context after every probe, so it is a
+ranking hint rather than an unverified proof shortcut. -/
 private def hasDirectLibraryProof (g : MVarId) (limit : Nat := 12) : MetaM Bool :=
   g.withContext do
     let base ← getMCtx
