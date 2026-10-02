@@ -1,0 +1,46 @@
+name: Phase 19 ecosystem-first hard theorem test
+
+on:
+  push:
+    branches: [phase19-ecosystem-strategies]
+    paths:
+      - "ecosystem_strategy_planner.py"
+      - "experiments/phase19_ecosystem_double_coprime.py"
+      - ".github/workflows/phase19-ecosystem-double-coprime.yml"
+
+jobs:
+  ecosystem-hard-test:
+    timeout-minutes: 12
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Lean and Mathlib cache
+        uses: leanprover/lean-action@v1
+        with:
+          auto-config: false
+          build: true
+          test: false
+          use-mathlib-cache: true
+          axiom-audit: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run ecosystem-first retest
+        run: python experiments/phase19_ecosystem_double_coprime.py
+
+      - name: Upload Phase 19 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gareen-phase19-ecosystem-double-coprime
+          path: |
+            .gareen/phase19-double-coprime*
+            .gareen/ecosystem_candidates/
+            .gareen/planner_candidates/
+          if-no-files-found: warn
+          include-hidden-files: true
