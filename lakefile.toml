@@ -7,5 +7,10 @@ name = "mathlib"
 git = "https://github.com/leanprover-community/mathlib4.git"
 rev = "v4.34.1"
 
+[[require]]
+name = "auto"
+git = "https://github.com/leanprover-community/lean-auto.git"
+rev = "6544cf60e89e363a9e889f6bc88762709ac18b52"
+
 [[lean_lib]]
 name = "Gareen"
