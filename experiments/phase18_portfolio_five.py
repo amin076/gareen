@@ -58,6 +58,10 @@ def main() -> int:
             "advanced_nodes": advanced["expanded_nodes"],
             "legacy_status": legacy["status"] if legacy else "not-run",
             "legacy_nodes": legacy["expanded_nodes"] if legacy else 0,
+            "legacy_stderr": (
+                legacy["attempts"][0]["stderr"][-1200:]
+                if legacy and legacy.get("attempts") else ""
+            ),
         }
         rows.append(row)
         OUT.write_text(json.dumps({"rows": rows}, indent=2), encoding="utf-8")
