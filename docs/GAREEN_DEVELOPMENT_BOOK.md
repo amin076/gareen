@@ -1119,3 +1119,166 @@ The next frontier tests should increase difficulty gradually and preserve this p
 3. run the portfolio without adding theorem-specific hints,
 4. record engine winner, nodes, time, retrieved/accepted declarations, and failure traces,
 5. keep both successful and failed results in this development record.
+
+
+---
+
+# Part XVIII — Phase 19: ecosystem-first proof strategy orchestration
+
+## Strategic change
+
+After Phase 18.5 reached 50/50 on the fixed benchmark, Gareen failed on a harder
+frontier theorem:
+
+```text
+∀ n : Nat,
+  Nat.gcd n (2 * n + 1) = 1 ∧
+  Nat.gcd (n + 1) (2 * n + 1) = 1
+```
+
+The Phase 17 retrieval baseline failed. The advanced recursive engine timed out
+before emitting a search node, and the frozen legacy engine exhausted 5,000
+nodes without proof.
+
+A review of Lean and automated-theorem-proving infrastructure showed that many
+capabilities Gareen was beginning to redesign already exist as mature
+ecosystem components.
+
+This changes the project strategy:
+
+> Gareen should not reimplement generic theorem-proving machinery when a
+> maintained, trusted, kernel-checkable implementation already exists.
+
+Gareen will instead become an **ecosystem-first mathematical research and proof
+orchestrator**. Custom research should be reserved for gaps that remain after
+existing systems have been integrated and measured.
+
+## Existing infrastructure adopted as proof strategies
+
+The first Phase 19 strategy layer directly activates proof procedures already
+available in the pinned Lean 4.34.1 + Mathlib environment:
+
+- `grind`
+- `aesop`
+- `exact? +grind`
+- `apply? +grind`
+- `simp_all`
+- `omega`
+- `norm_num`
+- `ring`
+- `linarith`
+- `nlinarith`
+- contradiction via `by_contra ...; grind`
+- contradiction via `by_contra ...; aesop`
+- constructor/conjunction decomposition with `grind`
+- constructor/conjunction decomposition with `aesop`
+- `exact?`
+- `apply?`
+- bounded induction variants using simplification, `grind`, and `aesop`
+
+Each strategy is run in an isolated generated Lean file. A strategy counts as a
+success only if Lean compiles the proof and the same explicit axiom audit used
+by Gareen's recursive engines passes.
+
+The existing Gareen advanced+legacy recursive portfolio remains available as a
+fallback strategy. It is no longer treated as the only general-purpose proof
+engine.
+
+## Why this is not abandoning Gareen
+
+Mathlib supplies mathematical knowledge. Lean's kernel checks proof terms.
+Aesop, grind, omega, arithmetic tactics, and related procedures provide
+well-engineered search and domain automation.
+
+Gareen's role moves upward:
+
+- classify goals,
+- choose and schedule proof strategies,
+- preserve evidence and failures,
+- compare strategies empirically,
+- share verified intermediate results in later phases,
+- learn which strategy works for which goal shape,
+- discover auxiliary lemmas,
+- run theorem-discovery/research campaigns,
+- decide when external provers or neural systems are worth invoking.
+
+This is intentionally analogous to adopting Lean/Mathlib instead of building a
+new proof kernel or mathematical library.
+
+## External ecosystem systems
+
+The audit also identified systems that should be integrated when compatible:
+
+- LeanHammer
+- lean-auto
+- Duper / external ATP pipelines
+- Zipperposition
+- cvc5 / SMT backends
+- neural/retrieval provers such as ReProver/LeanDojo-style systems
+- DeepSeek-Prover-class neural search
+- BFS-Prover-style learned best-first search
+
+These are **not silently marked active** in Phase 19.0.
+
+The project is currently pinned to Lean 4.34.1. LeanHammer's published
+installation instructions currently guarantee stable compatibility only
+through Lean 4.32.0. Rather than destabilize the verified Gareen foundation by
+downgrading Lean or pretending unsupported compatibility, Phase 19 first
+integrates the strategies already native to the current toolchain and records
+external systems as explicit adapters/dependencies to evaluate separately.
+
+The rule from this phase onward is:
+
+> Existing ecosystem capability first; Gareen-specific invention only after a
+> reproducible gap has been demonstrated.
+
+## Phase 19.0 implementation
+
+`ecosystem_strategy_planner.py` is the first ecosystem strategy orchestrator.
+
+For each theorem it runs bounded, isolated tactic strategies. It records:
+- tactic/strategy name,
+- verified or failed,
+- timeout,
+- wall-clock cost,
+- generated proof source,
+- compiler/audit output.
+
+If no ecosystem strategy succeeds within the configured resource envelope, the
+existing two-engine Gareen recursive portfolio is invoked as a fallback.
+
+The first experiment deliberately retests the exact harder theorem that
+defeated both previous Gareen engines. This makes the experiment a clean test
+of whether ecosystem adoption removes a real custom-search limitation.
+
+## Architectural direction
+
+Phase 19 is not merely a larger sequential list of tactics. The intended
+evolution is:
+
+```text
+Goal
+  ↓
+Strategy Orchestrator
+  ├─ Lean/Mathlib automation
+  ├─ classical contradiction/case strategies
+  ├─ arithmetic/domain solvers
+  ├─ Gareen recursive portfolio
+  ├─ external hammer/ATP adapters
+  └─ neural/search provers
+         ↓
+verified proof checkpoints / shared evidence
+         ↓
+Lean kernel
+```
+
+Later Phase 19 work may add:
+- strategy selection by goal features,
+- parallel/racing schedules,
+- progress-aware resource allocation,
+- verified checkpoint sharing,
+- proof-state exchange where technically sound,
+- context-specific strategy memory.
+
+But those features should reuse existing theory/prover infrastructure wherever
+possible rather than recreating it from scratch.
