@@ -90,10 +90,10 @@ jobs:
           if-no-files-found: warn
           include-hidden-files: true
 
-      - name: Phase 18 recursive planner fixed benchmark
+      - name: Phase 18.5 two-engine portfolio fixed benchmark
         run: python experiments/recursive_benchmark.py --seconds 1600 --per-goal 25 --baseline-limit 10
 
-      - name: Upload recursive planner evidence
+      - name: Upload portfolio benchmark evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
