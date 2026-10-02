@@ -72,6 +72,16 @@ private partial def search (cfg : Config) (stats : IO.Ref Stats)
         let _ ← emit stats task.parent text "" "cycle"
         return false
       let base ← getMCtx
+      -- Cache printed local proposition types for ranking. A retrieved rule whose
+      -- premises are already present in the local context should outrank a rule
+      -- that opens a large unrelated search branch.
+      let mut localTypes : Array String := #[]
+      for decl in ← getLCtx do
+        if decl.isImplementationDetail then continue
+        try
+          let localType ← instantiateMVars (← inferType decl.toExpr)
+          localTypes := localTypes.push (← ppExpr localType).pretty
+        catch _ => pure ()
       -- Local assumptions are candidates too; their conclusions need not be ground.
       let mut choices : Array Choice := #[]
       for decl in ← getLCtx do
@@ -101,14 +111,29 @@ private partial def search (cfg : Config) (stats : IO.Ref Stats)
           try
             let lemmaExpr ← LibrarySearch.mkLibrarySearchLemma name mod
             let goals ← goal.apply lemmaExpr
+            let childLabels ← goals.toArray.mapM label
             let mut cost := goals.length * 10
             if !goals.isEmpty then
-              let largest ← goals.foldlM (fun n g => do return max n (← label g).length) 0
+              let largest := childLabels.foldl (fun n s => max n s.length) 0
               if largest >= text.length then cost := cost + 200
             if constructors.any (fun c => c.1 == name) then cost := 5
-            for g in goals do
-              if !(← g.withContext (isProp (← g.getType))) then cost := cost + 100
-            if cfg.preferred.contains name then cost := cost / 2
+            for i in [:goals.length] do
+              let g := goals[i]!
+              let childText := childLabels[i]!
+              if !(← g.withContext (isProp (← g.getType))) then
+                cost := cost + 100
+              -- Hierarchical ranking: premises already available locally are
+              -- almost free. A premise that is a literal prefix/subgoal of the
+              -- current goal also represents structural progress. These generic
+              -- signals avoid domain-specific theorem-name templates.
+              if localTypes.contains childText then
+                cost := cost / 8
+              else if text.startsWith childText then
+                cost := cost / 2
+            -- Persistent memory is only a weak tie-breaker. Previously halving
+            -- the score let a lemma useful in one theorem dominate unrelated
+            -- goals and caused search explosions.
+            if cfg.preferred.contains name && cost > 0 then cost := cost - 1
             let suffix := match mod with | .none => "" | .mp => ".mp" | .mpr => ".mpr"
             choices := choices.push { rule := name.toString ++ suffix, goals := goals, state := (← getMCtx), score := cost, declaration := name.toString }
           catch _ => pure ()
