@@ -221,6 +221,7 @@ class EcosystemStrategyPlanner:
         theorem_name: str = "gareen_ecosystem_goal",
         wall_clock_budget_seconds: float = 300.0,
         stop_on_first_success: bool = True,
+        use_gareen_fallback: bool = True,
     ) -> EcosystemProofResult:
         statement = validate_statement(statement)
         if not _SAFE_IDENTIFIER.fullmatch(theorem_name):
@@ -259,7 +260,7 @@ class EcosystemStrategyPlanner:
 
         remaining = wall_clock_budget_seconds - (time.monotonic() - started)
         gareen_result = None
-        if remaining > 0:
+        if use_gareen_fallback and remaining > 0:
             # Gareen's recursive portfolio is retained as an additional research
             # strategy, not the foundation for generic automation.
             r = self.gareen.prove(statement, theorem_name=theorem_name + "_gareen")
