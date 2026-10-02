@@ -66,7 +66,7 @@ private def hasDirectLibraryProof (g : MVarId) (limit : Nat := 12) : MetaM Bool 
         let subgoals ← g.apply lemmaExpr
         let closed := subgoals.allM (fun h => h.isAssigned)
         setMCtx base
-        if closed then return true
+        if closed == true then return true
       catch _ =>
         setMCtx base
     setMCtx base
