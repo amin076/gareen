@@ -992,3 +992,35 @@ The important architectural principle is:
 
 > Different search biases are assets, not necessarily bugs. Gareen should preserve complementary solvers and orchestrate them rather than repeatedly destroying one behavior to optimize another.
 
+
+
+## Controlled ten-goal portfolio validation
+
+A ten-goal controlled validation was added after the five-goal success. The set deliberately mixed:
+- the three failures from the latest advanced-engine 50-goal run,
+- two recent regression recoveries,
+- one routine goal,
+- one library/transitivity goal,
+- one larger composition goal,
+- one deeper logic/divisibility goal,
+- one challenge goal.
+
+### First ten-goal attempt: failed because the timeout envelope was too tight
+
+The first run used 18 seconds per engine in an attempt to guarantee a sub-10-minute wall-clock result.
+
+This was too aggressive for CI startup/Lean elaboration overhead. Nine of ten goals timed out, most with zero emitted search nodes. Only `library_06` was recovered by the legacy engine.
+
+Observed result:
+- portfolio verified: 1/10
+- total test time: about 361 seconds
+- dominant failure pattern: `timeout, nodes=0`
+
+This was not interpreted as a mathematical/search regression because goals already proven by the same engines in the five-goal test now timed out before normal search began.
+
+### Decision from the failed run
+
+A per-engine wall-clock limit must leave room for Lean process startup, imports, elaboration, retrieval, and proof search. A timeout that is close to the startup cost produces misleading `nodes=0` failures.
+
+The ten-goal test was therefore rerun with the same 25-second per-engine envelope that had produced the successful five-goal result. The workflow itself remains capped at 10 minutes.
+
