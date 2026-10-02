@@ -1337,3 +1337,52 @@ search rather than assume one tactic family is universally stronger.
 
 It also identifies premise selection as a major remaining gap and provides a
 concrete reason to evaluate Hammer/ATP/retrieval systems next.
+
+
+## Phase 19 long-horizon experiment: five-hour strengthened Euclid test
+
+A long-horizon experiment was added to test whether substantially larger search
+budgets change the frontier, rather than judging Gareen only from short CI runs.
+
+GitHub-hosted standard runners permit jobs up to six hours; Gareen therefore
+uses a five-hour workflow timeout to leave a margin under the platform limit.
+Because the repository is public, standard GitHub-hosted Actions usage is not
+billed by minute under GitHub's public-repository policy.
+
+The chosen target is a strengthened form of Euclid's infinitude-of-primes
+theorem:
+
+```text
+∀ n : Nat, 2 ≤ n →
+  ∃ p : Nat, Nat.Prime p ∧ n < p ∧ Nat.gcd n p = 1
+```
+
+This is a proven theorem-shaped target, not an open conjecture. The purpose is
+to measure proof orchestration, premise selection, strategy switching, and
+long-horizon search. The target combines:
+- existence of a prime above an arbitrary natural number,
+- primality,
+- an order constraint,
+- and a derived coprimality/gcd obligation.
+
+A short sanity anchor is run first:
+
+```text
+∀ n : Nat, ∃ p : Nat, Nat.Prime p ∧ n < p
+```
+
+This confirms that the environment can access the classical infinitude-of-primes
+fact before spending a long budget on the strengthened target.
+
+The workflow is configured for a maximum of 300 minutes. Ecosystem strategies
+may receive up to 15 minutes each, while Gareen's recursive portfolio receives a
+much larger node/time envelope if the ecosystem layer does not close the goal.
+The script itself keeps a safety margin for Lean setup and artifact upload.
+
+This experiment should be interpreted carefully:
+- quick success is valuable evidence that existing ecosystem tools already cover
+  the theorem shape;
+- slow success reveals a real benefit from extra search budget;
+- failure after the long budget identifies a stronger premise-selection or
+  strategy-composition gap;
+- it is not evidence about open conjectures or research-level novelty.
