@@ -27,3 +27,17 @@ example (a b c : Nat) (hab : a ∣ b) (hbc : b ∣ c) : a ∣ c := by
 -- rule reducing to d ∣ a (a literal prefix/subgoal) over the symmetric dead end.
 example (a b c : Nat) : Nat.gcd a b ∣ a * c := by
   gareen_search 5 500 32
+
+
+-- Symmetric gcd-sum regression: these were solved before context-aware ranking,
+-- then regressed because a transitivity branch closed one premise locally while
+-- leaving a strategically worse residual divisibility goal.
+example (a b : Nat) : Nat.gcd a b ∣ b + a := by
+  gareen_search 6 800 48
+
+example (a b : Nat) : Nat.gcd a b ∣ (a + b) + (b + a) := by
+  gareen_search 6 1000 48
+
+example (a b : Nat) :
+    Nat.gcd a b ∣ a + b ∧ Nat.gcd a b ∣ b + a := by
+  gareen_search 6 1000 48
