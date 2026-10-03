@@ -1,0 +1,56 @@
+name: Phase 19 heterogeneous multi-subgoal benchmark
+
+on:
+  push:
+    branches: [phase19-ecosystem-strategies]
+    paths:
+      - "multi_subgoal_proof_planner.py"
+      - "ecosystem_strategy_planner.py"
+      - "lean_proof_planner.py"
+      - "portfolio_proof_planner.py"
+      - "recursive_proof_planner.py"
+      - "experiments/phase19_multi_subgoal.py"
+      - ".github/workflows/phase19-multi-subgoal.yml"
+
+jobs:
+  multi-subgoal:
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Lean and Mathlib cache
+        uses: leanprover/lean-action@v1
+        with:
+          auto-config: false
+          build: true
+          test: false
+          use-mathlib-cache: true
+          axiom-audit: true
+
+      - name: Build lean-auto dependency
+        run: lake build Auto
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run heterogeneous multi-subgoal benchmark
+        run: python experiments/phase19_multi_subgoal.py
+
+      - name: Upload multi-subgoal evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gareen-phase19-multi-subgoal
+          path: |
+            .gareen/phase19-multi-subgoal*
+            .gareen/multi_subgoal/
+            .gareen/multi_subgoal_feedback/
+            .gareen/ecosystem_candidates/
+            .gareen/feedback_candidates/
+            .gareen/planner_candidates/
+          if-no-files-found: warn
+          include-hidden-files: true
