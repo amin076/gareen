@@ -114,6 +114,8 @@ class DynamicProofStatePlanner:
             def _txt(x):
                 return x.decode(errors="replace") if isinstance(x, bytes) else (x or "")
             out, err, rc = _txt(exc.stdout), _txt(exc.stderr) + "\nProbe timed out.", 124
+        path.with_suffix(".stdout.log").write_text(out, encoding="utf-8")
+        path.with_suffix(".stderr.log").write_text(err, encoding="utf-8")
         return self._parse_states(out + "\n" + err), out, err, rc
 
     def prove(self, statement: str, *, theorem_name: str = "gareen_dynamic_goal", total_budget_seconds: float = 240.0) -> DynamicProofStateResult:
