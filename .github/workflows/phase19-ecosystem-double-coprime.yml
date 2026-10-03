@@ -5,6 +5,7 @@ on:
     branches: [phase19-ecosystem-strategies]
     paths:
       - "ecosystem_strategy_planner.py"
+      - "lean_proof_planner.py"
       - "experiments/phase19_ecosystem_double_coprime.py"
       - ".github/workflows/phase19-ecosystem-double-coprime.yml"
 
