@@ -1,4 +1,5 @@
 import Mathlib
+import Lean.Meta.Tactic.LibrarySearch
 
 open Lean Meta Elab Tactic
 
@@ -13,6 +14,11 @@ structure GoalState where
   index : Nat
   target : String
   locals : Array LocalFact := #[]
+  deriving ToJson
+
+structure DecompositionState where
+  rule : String
+  goals : Array GoalState := #[]
   deriving ToJson
 
 private def captureGoal (index : Nat) (g : MVarId) : MetaM GoalState :=
@@ -50,5 +56,68 @@ elab_rules : tactic
         report := report ++ s!"GAREEN_PROOF_STATE {toJson state |>.compress}\n"
         index := index + 1
       throwError s!"GAREEN_PROBE_COUNT {goals.length}\n{report}"
+
+private def labelRule (name : Name) (mod : LibrarySearch.DeclMod) : String :=
+  name.toString ++ match mod with
+    | .none => ""
+    | .mp => ".mp"
+    | .mpr => ".mpr"
+
+/-- Ask Lean itself for a useful decomposition. Constructors and indexed
+library-search declarations are tried transactionally. Gareen does not inspect
+the target syntax to decide how it should split; the emitted child proof states
+are the actual metavariable goals produced by Lean. -/
+syntax (name := gareenProbeAuto) "gareen_probe_auto" : tactic
+
+elab_rules : tactic
+  | `(tactic| gareen_probe_auto) => do
+      let goal ← getMainGoal
+      let before ← saveState
+      let base ← getMCtx
+      let type ← goal.withContext do instantiateMVars (← goal.getType)
+      let indexed ← goal.withContext do LibrarySearch.libSearchFindDecls type
+      let constructors : Array (Name × LibrarySearch.DeclMod) :=
+        match (← getEnv).find? (type.getAppFn.constName?.getD .anonymous) with
+        | some (.inductInfo info) =>
+            info.ctors.toArray.map (fun n => (n, .none))
+        | _ => #[]
+
+      let candidates := constructors ++ indexed
+      let mut chosenRule : Option String := none
+      let mut chosenGoals : List MVarId := []
+      let mut chosenState : Option MetavarContext := none
+      let mut bestCount : Nat := 1000000
+
+      for (name, mod) in candidates.toList.take 96 do
+        setMCtx base
+        try
+          let lemmaExpr ← goal.withContext do LibrarySearch.mkLibrarySearchLemma name mod
+          let children ← goal.apply lemmaExpr
+          let mut remaining : List MVarId := []
+          for child in children do
+            if !(← child.isAssigned) then
+              remaining := remaining.concat child
+          if remaining.length >= 2 && remaining.length < bestCount then
+            bestCount := remaining.length
+            chosenRule := some (labelRule name mod)
+            chosenGoals := remaining
+            chosenState := some (← getMCtx)
+        catch _ =>
+          pure ()
+
+      match chosenRule, chosenState with
+      | some rule, some state =>
+          setMCtx state
+          let mut reports : Array GoalState := #[]
+          for i in [:chosenGoals.length] do
+            reports := reports.push (← captureGoal i chosenGoals[i]!)
+          logInfo m!"GAREEN_DECOMPOSITION_RULE {rule}"
+          for report in reports do
+            logInfo m!"GAREEN_PROOF_STATE {toJson report |>.compress}"
+          replaceMainGoal chosenGoals
+          throwError s!"GAREEN_PROBE_COUNT {chosenGoals.length}"
+      | _, _ =>
+          before.restore
+          throwError "GAREEN_NO_DYNAMIC_DECOMPOSITION"
 
 end Gareen.ProofStateProbe
