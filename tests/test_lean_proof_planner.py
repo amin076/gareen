@@ -4,6 +4,8 @@ from lean_proof_planner import (
     LeanProofPlanner,
     _constants_from_suggestions,
     _extract_suggestions,
+    _replace_first_search_marker,
+    _suggestion_variants,
     decompose_dvd_add,
 )
 
@@ -53,6 +55,40 @@ class ProofPlannerStructureTests(unittest.TestCase):
         self.assertNotIn("Nat.gcd_dvd_left", combined)
         self.assertNotIn("Nat.gcd_dvd_right", combined)
         self.assertNotIn("Nat.dvd_add_right", combined)
+
+    def test_feedback_replaces_next_search_checkpoint_preserving_indent(self):
+        lines = (
+            "intro d a b hda hdb",
+            "have h : d ∣ a := by",
+            "  exact?",
+            "exact?",
+        )
+        repaired = _replace_first_search_marker(
+            lines,
+            "exact Nat.dvd_refl d",
+        )
+        self.assertEqual(
+            repaired,
+            (
+                "intro d a b hda hdb",
+                "have h : d ∣ a := by",
+                "  exact Nat.dvd_refl d",
+                "exact?",
+            ),
+        )
+
+    def test_feedback_generates_simpa_repair_variant(self):
+        variants = _suggestion_variants(
+            "exact (Nat.dvd_add_iff_right hda).mp hdb"
+        )
+        self.assertIn(
+            "exact (Nat.dvd_add_iff_right hda).mp hdb",
+            variants,
+        )
+        self.assertIn(
+            "simpa using ((Nat.dvd_add_iff_right hda).mp hdb)",
+            variants,
+        )
 
     def test_extracts_mathlib_suggestions_and_constants(self):
         stdout = (
