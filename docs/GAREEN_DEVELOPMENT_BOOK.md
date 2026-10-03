@@ -1695,3 +1695,80 @@ Gareen introduced the variables and hypotheses into the local context.
 This result extends the previous 5/5 medium benchmark and double-coprime
 frontier success to a harder theorem involving primes, powers, divisibility,
 existential witnesses, and Fermat-style modular structure.
+
+
+---
+
+# Part XXII — Second hard benchmark: primes congruent to 3 mod 4
+
+The second hard benchmark deliberately changed theorem structure away from the
+Fermat-style power/divisibility problem.
+
+Target:
+
+```text
+∀ N : Nat,
+  ∃ p k : Nat,
+  Nat.Prime p ∧
+  N < p ∧
+  p = 4 * k + 3
+```
+
+Mathematically, this states that for every bound `N`, there is a larger prime
+of the form `4k + 3`.  The benchmark combines:
+- existential prime generation,
+- an order constraint,
+- a congruence/normal-form witness,
+- conjunction composition.
+
+Resource limits:
+- GitHub Actions hard cap: 10 minutes
+- internal proof-search budget: 300 seconds
+
+Result:
+- theorem status: **proved**
+- winning layer: `lean_feedback_loop`
+- winning strategy: `feedback_introduced_apply_retrieval`
+- planner elapsed: **184.781 seconds**
+- total GitHub job elapsed: about **7m46s**
+- Gareen recursive fallback: **not used**
+
+The winning generated proof state was:
+
+```lean
+intro N
+apply?
+```
+
+This is important to interpret conservatively.  Gareen did not construct a long
+new proof using its recursive engines in this run.  Its successful contribution
+was to transform the original quantified theorem into a local proof context and
+then invoke Mathlib retrieval at the point where `apply?` could close the goal.
+
+All one-shot ecosystem attempts before this context-aware stage failed, timed
+out, or were rejected by the proof audit.
+
+## Current architectural conclusion
+
+Across the medium 5/5 benchmark, the double-coprime frontier, the composed
+Fermat benchmark, and the prime-3-mod-4 benchmark, the strongest repeated signal
+is now:
+
+> Gareen's demonstrated value is currently stronger as a proof orchestrator
+> than as an independent recursive theorem prover.
+
+The advanced and legacy recursive engines remain useful fallback/search
+components, but they have not been the decisive mechanism in the latest hard
+successes.  The decisive mechanism has repeatedly been:
+1. expose or reshape the proof context,
+2. choose a suitable existing solver/retrieval tactic,
+3. retry in the transformed state,
+4. accept only Lean-verified results.
+
+This is a positive result, not a failure of the project direction.  It suggests
+that the next research investment should prioritize:
+- explicit subgoal extraction,
+- routing different subgoals to different tactics/provers,
+- proof-checkpoint exchange,
+- strategy selection from goal features,
+- and only then further investment in Gareen-specific recursive search.
