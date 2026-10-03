@@ -43,8 +43,10 @@ elab_rules : tactic
   | `(tactic| gareen_probe $seq:tacticSeq) => do
       evalTactic seq
       let goals ← getGoals
-      for i in [:goals.size] do
-        let state ← captureGoal i goals[i]!
+      let mut index := 0
+      for goal in goals do
+        let state ← captureGoal index goal
         logInfo m!"GAREEN_PROOF_STATE {toJson state |>.compress}"
+        index := index + 1
 
 end Gareen.ProofStateProbe
