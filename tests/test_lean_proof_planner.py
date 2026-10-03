@@ -3,6 +3,7 @@ import unittest
 from lean_proof_planner import (
     LeanProofPlanner,
     _constants_from_suggestions,
+    _context_intro_names,
     _extract_suggestions,
     _replace_first_search_marker,
     _suggestion_variants,
@@ -55,6 +56,25 @@ class ProofPlannerStructureTests(unittest.TestCase):
         self.assertNotIn("Nat.gcd_dvd_left", combined)
         self.assertNotIn("Nat.gcd_dvd_right", combined)
         self.assertNotIn("Nat.dvd_add_right", combined)
+
+    def test_extracts_failed_exact_candidate_feedback(self):
+        stdout = (
+            "error: found a proof, but the corresponding tactic failed:\n"
+            "  (expose_names; exact fun d a b h1 h2 => "
+            "(Nat.dvd_add_iff_right h1).mp h2)\n"
+        )
+        suggestions = _extract_suggestions(stdout, "")
+        self.assertIn(
+            "(expose_names; exact fun d a b h1 h2 => "
+            "(Nat.dvd_add_iff_right h1).mp h2)",
+            suggestions,
+        )
+
+    def test_context_intro_names_include_implication_hypotheses(self):
+        names = _context_intro_names(
+            "∀ d a b : Nat, d ∣ a → d ∣ b → d ∣ a + b"
+        )
+        self.assertEqual(names, ("d", "a", "b", "h1", "h2"))
 
     def test_feedback_replaces_next_search_checkpoint_preserving_indent(self):
         lines = (
