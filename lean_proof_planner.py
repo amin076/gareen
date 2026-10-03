@@ -260,6 +260,44 @@ def _constants_from_suggestions(suggestions: tuple[str, ...]) -> tuple[str, ...]
     return tuple(constants)
 
 
+def _replace_first_search_marker(
+    proof_lines: tuple[str, ...],
+    suggestion: str,
+) -> Optional[tuple[str, ...]]:
+    """Replace the next exact?/apply? checkpoint with a Lean suggestion.
+
+    Indentation is preserved so this also works inside nested `have ... := by`
+    blocks.  Returning None means the candidate no longer contains a retrieval
+    checkpoint that can consume feedback.
+    """
+    cleaned = re.sub(r"^\[[^]]+\]\s*", "", suggestion.strip())
+    if not cleaned:
+        return None
+
+    for index, line in enumerate(proof_lines):
+        stripped = line.strip()
+        if stripped not in {"exact?", "apply?"}:
+            continue
+        indent = line[: len(line) - len(line.lstrip())]
+        updated = list(proof_lines)
+        updated[index] = indent + cleaned
+        return tuple(updated)
+    return None
+
+
+def _suggestion_variants(suggestion: str) -> tuple[str, ...]:
+    """Generate small, generic repair variants without theorem-specific hints."""
+    cleaned = re.sub(r"^\[[^]]+\]\s*", "", suggestion.strip())
+    variants = [cleaned] if cleaned else []
+
+    if cleaned.startswith("exact "):
+        term = cleaned[len("exact ") :].strip()
+        if term:
+            variants.append(f"simpa using ({term})")
+
+    return tuple(dict.fromkeys(v for v in variants if v))
+
+
 class LeanProofPlanner:
     """Retrieve Mathlib facts and compose a small structured proof."""
 
@@ -269,6 +307,7 @@ class LeanProofPlanner:
         *,
         generated_dir: str = ".gareen/planner_candidates",
         timeout_seconds: int = 90,
+        max_feedback_rounds: int = 3,
     ) -> None:
         self.repo_root = (
             Path(repo_root).resolve()
@@ -277,6 +316,7 @@ class LeanProofPlanner:
         )
         self.generated_dir = self.repo_root / generated_dir
         self.timeout_seconds = timeout_seconds
+        self.max_feedback_rounds = max(0, int(max_feedback_rounds))
 
     def available(self) -> bool:
         return shutil.which("lake") is not None
@@ -335,6 +375,74 @@ class LeanProofPlanner:
             stdout=stdout,
             stderr=stderr,
         )
+
+    def _feedback_repair_attempts(
+        self,
+        *,
+        theorem_name: str,
+        statement: str,
+        base_strategy: str,
+        proof_lines: tuple[str, ...],
+        initial_attempt: PlannerAttempt,
+        deadline: float,
+        timeout_seconds: float,
+    ) -> tuple[PlannerAttempt, ...]:
+        """Turn Lean suggestions into new proof candidates and retry them.
+
+        This is the first explicit Gareen feedback loop:
+            suggestion -> candidate rewrite -> Lean retry -> new suggestion -> ...
+
+        It deliberately performs only generic rewrites.  Every accepted result
+        is still checked by Lean itself.
+        """
+        if self.max_feedback_rounds <= 0 or not initial_attempt.suggestions:
+            return ()
+
+        queue: list[tuple[tuple[str, ...], int]] = []
+        seen: set[tuple[str, ...]] = {proof_lines}
+
+        for suggestion in initial_attempt.suggestions:
+            for variant in _suggestion_variants(suggestion):
+                child = _replace_first_search_marker(proof_lines, variant)
+                if child is not None and child not in seen:
+                    seen.add(child)
+                    queue.append((child, 1))
+
+        repaired: list[PlannerAttempt] = []
+        candidate_index = 0
+
+        while queue:
+            candidate_lines, depth = queue.pop(0)
+            if depth > self.max_feedback_rounds:
+                continue
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+
+            candidate_index += 1
+            attempt = self._attempt(
+                theorem_name=theorem_name,
+                statement=statement,
+                strategy=f"{base_strategy}_feedback_{depth}_{candidate_index}",
+                proof_lines=candidate_lines,
+                timeout_seconds=min(timeout_seconds, remaining),
+            )
+            repaired.append(attempt)
+
+            if attempt.verified:
+                break
+
+            if depth >= self.max_feedback_rounds:
+                continue
+
+            for suggestion in attempt.suggestions:
+                for variant in _suggestion_variants(suggestion):
+                    child = _replace_first_search_marker(candidate_lines, variant)
+                    if child is not None and child not in seen:
+                        seen.add(child)
+                        queue.append((child, depth + 1))
+
+        return tuple(repaired)
 
     def _strategies(self, statement: str) -> tuple[tuple[str, tuple[str, ...]], ...]:
         strategies: list[tuple[str, tuple[str, ...]]] = [
@@ -422,6 +530,26 @@ class LeanProofPlanner:
                     winning_strategy=strategy,
                     attempts=tuple(attempts),
                 )
+
+            feedback_attempts = self._feedback_repair_attempts(
+                theorem_name=theorem_name,
+                statement=statement,
+                base_strategy=strategy,
+                proof_lines=proof_lines,
+                initial_attempt=attempt,
+                deadline=deadline,
+                timeout_seconds=float(timeout),
+            )
+            attempts.extend(feedback_attempts)
+            for repaired in feedback_attempts:
+                if repaired.verified:
+                    return PlannedProofResult(
+                        theorem_name=theorem_name,
+                        statement=statement,
+                        verified=True,
+                        winning_strategy=repaired.strategy,
+                        attempts=tuple(attempts),
+                    )
 
         return PlannedProofResult(
             theorem_name=theorem_name,
