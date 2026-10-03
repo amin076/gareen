@@ -372,19 +372,15 @@ class EcosystemStrategyPlanner:
                     f"feedback_{feedback_result.winning_strategy}",
                     "lean_feedback_loop",
                     tuple(attempts),
-                    {"feedback": asdict(feedback_result)},
+                    None,
                     round(time.monotonic() - started, 3),
                 )
-            gareen_result = {"feedback": asdict(feedback_result)}
-
         remaining = wall_clock_budget_seconds - (time.monotonic() - started)
         if use_gareen_fallback and remaining > 0:
             # Gareen's recursive portfolio is retained as an additional research
             # strategy, not the foundation for generic automation.
             r = self.gareen.prove(statement, theorem_name=theorem_name + "_gareen")
-            if gareen_result is None:
-                gareen_result = {}
-            gareen_result["recursive"] = asdict(r)
+            gareen_result = asdict(r)
             if r.verified:
                 return EcosystemProofResult(
                     theorem_name,
