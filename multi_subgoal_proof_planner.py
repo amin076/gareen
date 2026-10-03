@@ -117,9 +117,19 @@ class MultiSubgoalProofPlanner:
 
     @staticmethod
     def _route(statement: str) -> tuple[str, ...]:
-        if "Nat.Prime" in statement and "^" in statement:
+        """Route from the branch target, not from shared hypotheses."""
+        _, body = _split_forall(statement)
+        rest = body
+        while True:
+            split = _split_top_level(rest, "→")
+            if split is None:
+                break
+            _, rest = split
+        target = _strip_outer_parens(rest)
+
+        if "Nat.Prime" in target and "^" in target:
             return ("feedback", "ecosystem", "gareen")
-        if "∣" in statement and "+" in statement:
+        if "∣" in target and "+" in target:
             return ("gareen", "feedback", "ecosystem")
         return ("ecosystem", "feedback", "gareen")
 
