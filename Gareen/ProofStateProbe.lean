@@ -49,6 +49,6 @@ elab_rules : tactic
         let state ← captureGoal index goal
         report := report ++ s!"GAREEN_PROOF_STATE {toJson state |>.compress}\n"
         index := index + 1
-      throwError report
+      throwError s!"GAREEN_PROBE_COUNT {goals.length}\n{report}"
 
 end Gareen.ProofStateProbe
