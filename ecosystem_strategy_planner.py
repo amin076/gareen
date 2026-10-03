@@ -138,12 +138,17 @@ class EcosystemStrategyPlanner:
         theorem_name: str,
         statement: str,
         proof_lines: tuple[str, ...],
+        *,
+        include_auto: bool = False,
     ) -> str:
         if not _SAFE_IDENTIFIER.fullmatch(theorem_name):
             raise ValueError(f"Unsafe theorem identifier: {theorem_name!r}")
         lines = [
             "import Mathlib",
-            "import Auto.Tactic",
+        ]
+        if include_auto:
+            lines.append("import Auto.Tactic")
+        lines.extend([
             "",
             "namespace Gareen.EcosystemGenerated",
             "",
@@ -172,7 +177,12 @@ class EcosystemStrategyPlanner:
         safe_strategy = re.sub(r"[^A-Za-z0-9_]+", "_", strategy)
         path = self.generated_dir / f"{theorem_name}_{safe_strategy}.lean"
         path.write_text(
-            self._render(theorem_name, statement, proof_lines),
+            self._render(
+                theorem_name,
+                statement,
+                proof_lines,
+                include_auto=strategy.startswith("auto"),
+            ),
             encoding="utf-8",
         )
 
