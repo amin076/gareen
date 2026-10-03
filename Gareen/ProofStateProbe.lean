@@ -75,35 +75,58 @@ elab_rules : tactic
       let before ← saveState
       let base ← getMCtx
       let type ← goal.withContext do instantiateMVars (← goal.getType)
-      let indexed ← goal.withContext do LibrarySearch.libSearchFindDecls type
       let constructors : Array (Name × LibrarySearch.DeclMod) :=
         match (← getEnv).find? (type.getAppFn.constName?.getD .anonymous) with
         | some (.inductInfo info) =>
             info.ctors.toArray.map (fun n => (n, .none))
         | _ => #[]
 
-      let candidates := constructors ++ indexed
       let mut chosenRule : Option String := none
       let mut chosenGoals : List MVarId := []
       let mut chosenState : Option MetavarContext := none
-      let mut bestCount : Nat := 1000000
 
-      for (name, mod) in candidates.toList.take 96 do
+      -- First ask the target type itself how it decomposes.  This is generic
+      -- (And.intro, Exists.intro, structure constructors, etc.) and avoids an
+      -- expensive global library search when the local inductive structure is
+      -- already sufficient.
+      for (name, mod) in constructors do
+        if chosenRule.isNone then
+          setMCtx base
+          try
+            let lemmaExpr ← goal.withContext do LibrarySearch.mkLibrarySearchLemma name mod
+            let children ← goal.apply lemmaExpr
+            let mut remaining : List MVarId := []
+            for child in children do
+              if !(← child.isAssigned) then
+                remaining := remaining.concat child
+            if remaining.length >= 2 then
+              chosenRule := some (labelRule name mod)
+              chosenGoals := remaining
+              chosenState := some (← getMCtx)
+          catch _ =>
+            pure ()
+
+      -- Only if the target constructor did not expose a useful split, consult
+      -- a small bounded set of indexed library declarations.
+      if chosenRule.isNone then
         setMCtx base
-        try
-          let lemmaExpr ← goal.withContext do LibrarySearch.mkLibrarySearchLemma name mod
-          let children ← goal.apply lemmaExpr
-          let mut remaining : List MVarId := []
-          for child in children do
-            if !(← child.isAssigned) then
-              remaining := remaining.concat child
-          if remaining.length >= 2 && remaining.length < bestCount then
-            bestCount := remaining.length
-            chosenRule := some (labelRule name mod)
-            chosenGoals := remaining
-            chosenState := some (← getMCtx)
-        catch _ =>
-          pure ()
+        let indexed ← goal.withContext do LibrarySearch.libSearchFindDecls type
+        for (name, mod) in indexed.toList.take 24 do
+          if chosenRule.isNone then
+            setMCtx base
+            try
+              let lemmaExpr ← goal.withContext do LibrarySearch.mkLibrarySearchLemma name mod
+              let children ← goal.apply lemmaExpr
+              let mut remaining : List MVarId := []
+              for child in children do
+                if !(← child.isAssigned) then
+                  remaining := remaining.concat child
+              if remaining.length >= 2 then
+                chosenRule := some (labelRule name mod)
+                chosenGoals := remaining
+                chosenState := some (← getMCtx)
+            catch _ =>
+              pure ()
 
       match chosenRule, chosenState with
       | some rule, some state =>
