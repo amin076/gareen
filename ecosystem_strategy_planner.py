@@ -22,6 +22,7 @@ import subprocess
 import time
 from typing import Optional
 
+from lean_proof_planner import LeanProofPlanner
 from portfolio_proof_planner import PortfolioProofPlanner
 from recursive_proof_planner import validate_statement, audited
 
@@ -74,6 +75,12 @@ class EcosystemStrategyPlanner:
         )
         self.generated_dir = self.repo_root / generated_dir
         self.per_strategy_timeout = per_strategy_timeout
+        self.feedback = LeanProofPlanner(
+            self.repo_root,
+            generated_dir=".gareen/feedback_candidates",
+            timeout_seconds=max(10, int(per_strategy_timeout)),
+            max_feedback_rounds=3,
+        )
         self.gareen = PortfolioProofPlanner(
             self.repo_root,
             advanced_timeout=gareen_timeout,
@@ -114,7 +121,6 @@ class EcosystemStrategyPlanner:
             ("contradiction_aesop", ("by_contra h", "aesop")),
             ("split_grind", ("constructor <;> grind",)),
             ("split_aesop", ("constructor <;> aesop",)),
-            ("library_search", ("library_search",)),
             ("exact_search", ("exact?",)),
             ("apply_search", ("apply?",)),
         ]
@@ -346,11 +352,39 @@ class EcosystemStrategyPlanner:
 
         remaining = wall_clock_budget_seconds - (time.monotonic() - started)
         gareen_result = None
+
+        # Feedback-aware proof planning sits between one-shot tactics and the
+        # custom recursive portfolio. It consumes Lean's own exact?/apply?
+        # suggestions, rewrites the next retrieval checkpoint, retries the
+        # candidate, and can continue for several bounded rounds.
+        if remaining > 0:
+            feedback_result = self.feedback.prove(
+                statement,
+                theorem_name=theorem_name + "_feedback",
+                wall_clock_budget_seconds=min(remaining, max(30.0, self.per_strategy_timeout * 4)),
+                per_attempt_timeout_seconds=max(10, int(self.per_strategy_timeout)),
+            )
+            if feedback_result.verified:
+                return EcosystemProofResult(
+                    theorem_name,
+                    statement,
+                    True,
+                    f"feedback_{feedback_result.winning_strategy}",
+                    "lean_feedback_loop",
+                    tuple(attempts),
+                    {"feedback": asdict(feedback_result)},
+                    round(time.monotonic() - started, 3),
+                )
+            gareen_result = {"feedback": asdict(feedback_result)}
+
+        remaining = wall_clock_budget_seconds - (time.monotonic() - started)
         if use_gareen_fallback and remaining > 0:
             # Gareen's recursive portfolio is retained as an additional research
             # strategy, not the foundation for generic automation.
             r = self.gareen.prove(statement, theorem_name=theorem_name + "_gareen")
-            gareen_result = asdict(r)
+            if gareen_result is None:
+                gareen_result = {}
+            gareen_result["recursive"] = asdict(r)
             if r.verified:
                 return EcosystemProofResult(
                     theorem_name,
