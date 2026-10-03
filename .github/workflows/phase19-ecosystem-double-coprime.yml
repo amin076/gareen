@@ -25,6 +25,9 @@ jobs:
           use-mathlib-cache: true
           axiom-audit: true
 
+      - name: Build lean-auto dependency
+        run: lake build Auto
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
