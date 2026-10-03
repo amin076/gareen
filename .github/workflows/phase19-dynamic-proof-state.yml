@@ -35,7 +35,7 @@ jobs:
         run: lake build Auto
 
       - name: Build proof-state probe
-        run: lake env lean Gareen/ProofStateProbe.lean
+        run: lake build Gareen.ProofStateProbe
 
       - name: Set up Python
         uses: actions/setup-python@v5
