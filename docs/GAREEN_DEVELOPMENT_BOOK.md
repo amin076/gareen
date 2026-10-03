@@ -1772,3 +1772,127 @@ that the next research investment should prioritize:
 - proof-checkpoint exchange,
 - strategy selection from goal features,
 - and only then further investment in Gareen-specific recursive search.
+
+
+---
+
+# Part XXIII — Strict audit correction and validated multi-provider orchestration
+
+A heterogeneous multi-subgoal benchmark exposed a trust-boundary bug in
+`LeanProofPlanner`.
+
+Previously, feedback attempts treated `returncode == 0` as proof success.
+Lean retrieval tactics such as `apply?` can return successfully while leaving a
+declaration containing `sorry`.  That means a suggestion can look operationally
+successful without constituting an accepted theorem proof.
+
+The planner now:
+- emits `#print axioms` for every feedback candidate;
+- rejects any candidate containing `sorry` or `sorryAx`;
+- requires exactly one axiom report;
+- accepts only the same axiom allowlist used by Gareen recursive search:
+  `propext`, `Classical.choice`, and `Quot.sound`.
+
+## Revalidation impact
+
+After the strict audit fix:
+- the five-medium benchmark remains **5/5 verified**;
+- the divisibility recovery through `lean_feedback_loop` remains valid;
+- the previously reported feedback success on the double-coprime frontier is
+  **not valid under the stricter audit** and the theorem is again classified as
+  **unproved** in the strict rerun;
+- earlier Fermat-style and prime-3-mod-4 feedback results must be treated as
+  provisional until rerun under the strict audit.
+
+This correction is important: workflow success or Lean process exit code zero
+must never be confused with a theorem accepted without `sorry`.
+
+## Validated heterogeneous multi-provider experiment
+
+A new benchmark was designed to test whether splitting a theorem into
+heterogeneous subgoals provides real value.
+
+Target:
+
+```text
+∀ d a b m n : Nat,
+  d ∣ a →
+  d ∣ b →
+  m ≤ n →
+  ((m + 7 ≤ n + 7) ∧ d ∣ a + b)
+```
+
+A direct unsplit ecosystem-only baseline was run first.
+
+Baseline result:
+- verified: **false**
+- winning strategy: none
+- elapsed: about **55.1s**
+
+Gareen then split the conjunction and routed the branches independently.
+
+Branch 1:
+
+```text
+m + 7 ≤ n + 7
+```
+
+Result:
+- provider: `lean_mathlib_ecosystem`
+- strategy: `grind`
+- verified: **true**
+- elapsed: about **24.0s**
+
+Branch 2:
+
+```text
+d ∣ a + b
+```
+
+under the shared assumptions `d ∣ a` and `d ∣ b`.
+
+Result:
+- provider: **`gareen_advanced`**
+- strategy: `recursive_library_search`
+- accepted declaration: `Nat.dvd_add`
+- verified: **true**
+- elapsed: about **18.0s**
+
+The final theorem was then assembled from the two independently accepted helper
+proofs and compiled again.
+
+Final result:
+- assembly return code: `0`
+- final Lean audit: **verified**
+- dependency report: `[propext, Classical.choice, Quot.sound]`
+- no `sorryAx`
+- total split-routing elapsed: about **60.4s**
+- total experiment including direct baseline: about **115.6s**
+
+This is the first strict, end-to-end demonstration that Gareen can:
+1. detect a composite theorem structure,
+2. split it into independent subgoals,
+3. route different subgoals to different proof providers,
+4. include Gareen's own recursive prover as a real provider,
+5. preserve the resulting proofs,
+6. assemble them into one theorem,
+7. and pass a final Lean axiom audit.
+
+Crucially, the direct whole-theorem baseline failed while split routing
+succeeded.  Therefore the orchestration itself added demonstrated proof
+coverage on this benchmark.
+
+## Architectural interpretation
+
+The current evidence supports a nuanced conclusion:
+
+> Gareen's strongest demonstrated contribution is proof orchestration, while
+> its advanced recursive prover is still useful as a specialized provider
+> inside that orchestration.
+
+The recursive engine should therefore not be removed.  It should be treated as
+one solver among several, selected when the subgoal shape matches its strengths.
+
+The next research step is to generalize from top-level conjunction splitting to
+explicit Lean proof-state extraction and recursive routing of dynamically
+generated subgoals.
