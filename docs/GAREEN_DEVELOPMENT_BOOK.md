@@ -1647,3 +1647,51 @@ goal
 The immediate next research direction is to generalize this from textual
 suggestion repair to explicit proof-state/subgoal routing and cross-solver
 checkpoint exchange.
+
+
+---
+
+# Part XXI — Hard Fermat-style composed benchmark
+
+A harder Phase 19 benchmark tested a composed form of Fermat's little theorem:
+
+```text
+∀ p a : Nat,
+  Nat.Prime p →
+  ¬ p ∣ a →
+  ∃ k : Nat, a ^ (p - 1) = k * p + 1
+```
+
+This asks for an explicit existential quotient form rather than ending at a
+modulo/remainder statement. The benchmark therefore requires Gareen to expose
+the local proof context and retrieve a proof after introducing the prime and
+non-divisibility hypotheses.
+
+Resource limits:
+- GitHub Actions job hard cap: 10 minutes
+- internal proof-search budget: 300 seconds
+
+Result:
+- theorem status: **proved**
+- winning layer: `lean_feedback_loop`
+- winning strategy: `feedback_introduced_apply_retrieval`
+- planner elapsed: **155.544 seconds**
+- total GitHub job elapsed: about **6m48s**
+- Gareen recursive fallback: **not used**
+
+All one-shot attempts failed or were audit-rejected before the context-aware
+retrieval layer succeeded. The successful generated proof state was:
+
+```lean
+intro p a h1 h2
+apply?
+```
+
+This is important to interpret accurately. The decisive Gareen contribution in
+this run was context transformation and strategy scheduling: the same retrieval
+tool was ineffective on the original quantified theorem, but succeeded after
+Gareen introduced the variables and hypotheses into the local context.
+
+This result extends the previous 5/5 medium benchmark and double-coprime
+frontier success to a harder theorem involving primes, powers, divisibility,
+existential witnesses, and Fermat-style modular structure.
