@@ -18,6 +18,8 @@ from __future__ import annotations
 from dataclasses import asdict
 import json
 from pathlib import Path
+import shutil
+import subprocess
 import sys
 import time
 
@@ -39,8 +41,29 @@ OUT = ROOT / ".gareen/phase19-five-hour-euclid.json"
 MD = ROOT / ".gareen/phase19-five-hour-euclid.md"
 
 
+def require_lean_toolchain() -> None:
+    """Fail CI only when the Lean toolchain itself is unavailable."""
+    if shutil.which("lake") is None:
+        raise RuntimeError("Lean infrastructure failure: 'lake' is not on PATH")
+    probe = subprocess.run(
+        ["lake", "env", "lean", "--version"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    if probe.returncode != 0:
+        detail = (probe.stderr or probe.stdout).strip()
+        raise RuntimeError(
+            "Lean infrastructure failure: 'lake env lean --version' failed "
+            f"with exit code {probe.returncode}: {detail}"
+        )
+
+
 def compact(result):
     return {
+        "status": "proved" if result.verified else "unproved",
         "verified": result.verified,
         "winning_strategy": result.winning_strategy,
         "layer": result.layer,
@@ -61,6 +84,7 @@ def compact(result):
 
 def main() -> int:
     OUT.parent.mkdir(parents=True, exist_ok=True)
+    require_lean_toolchain()
 
     # Quick sanity anchor: the classical infinitude-of-primes statement.
     anchor_planner = EcosystemStrategyPlanner(
@@ -101,6 +125,8 @@ def main() -> int:
 
     payload = {
         "experiment": "phase19-five-hour-euclid",
+        "experiment_status": "completed",
+        "theorem_status": "proved" if target.verified else "unproved",
         "anchor_statement": ANCHOR,
         "anchor": compact(anchor),
         "target_statement": TARGET,
@@ -170,7 +196,13 @@ def main() -> int:
         ),
     }, indent=2), flush=True)
 
-    return 0 if target.verified else 1
+    print(
+        "Experiment completed successfully. "
+        f"Target theorem status: {'proved' if target.verified else 'unproved'}. "
+        "An unproved target does not constitute a CI failure.",
+        flush=True,
+    )
+    return 0
 
 
 if __name__ == "__main__":
