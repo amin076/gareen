@@ -16,6 +16,8 @@ from __future__ import annotations
 from dataclasses import asdict
 import json
 from pathlib import Path
+import shutil
+import subprocess
 import sys
 import time
 
@@ -51,8 +53,29 @@ OUT = ROOT / ".gareen/phase19-five-medium.json"
 MD = ROOT / ".gareen/phase19-five-medium.md"
 
 
+def require_lean_toolchain() -> None:
+    """Fail CI only when the Lean toolchain itself is unavailable."""
+    if shutil.which("lake") is None:
+        raise RuntimeError("Lean infrastructure failure: 'lake' is not on PATH")
+    probe = subprocess.run(
+        ["lake", "env", "lean", "--version"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    if probe.returncode != 0:
+        detail = (probe.stderr or probe.stdout).strip()
+        raise RuntimeError(
+            "Lean infrastructure failure: 'lake env lean --version' failed "
+            f"with exit code {probe.returncode}: {detail}"
+        )
+
+
 def main() -> int:
     OUT.parent.mkdir(parents=True, exist_ok=True)
+    require_lean_toolchain()
     planner = EcosystemStrategyPlanner(
         per_strategy_timeout=15,
         gareen_timeout=30,
@@ -73,6 +96,7 @@ def main() -> int:
         row = {
             "name": name,
             "statement": statement,
+            "status": "proved" if result.verified else "unproved",
             "verified": result.verified,
             "winning_strategy": result.winning_strategy,
             "layer": result.layer,
@@ -89,7 +113,10 @@ def main() -> int:
             ],
         }
         rows.append(row)
-        OUT.write_text(json.dumps({"rows": rows}, indent=2), encoding="utf-8")
+        OUT.write_text(
+            json.dumps({"experiment_status": "running", "rows": rows}, indent=2),
+            encoding="utf-8",
+        )
         print(
             f"{name}: verified={result.verified}, "
             f"winner={result.winning_strategy}, "
@@ -97,8 +124,18 @@ def main() -> int:
             flush=True,
         )
 
+    proved = sum(r["verified"] for r in rows)
+    unproved = len(rows) - proved
+    theorem_status = (
+        "all-proved" if proved == len(rows)
+        else "unproved" if proved == 0
+        else "partially-proved"
+    )
     payload = {
-        "verified": sum(r["verified"] for r in rows),
+        "experiment_status": "completed",
+        "theorem_status": theorem_status,
+        "proved": proved,
+        "unproved": unproved,
         "total": len(rows),
         "elapsed_seconds": round(time.monotonic() - started, 3),
         "rows": rows,
@@ -108,7 +145,10 @@ def main() -> int:
     lines = [
         "# Phase 19 ecosystem-only five-medium diagnostic",
         "",
-        f"- Verified: {payload['verified']}/{payload['total']}",
+        "- Experiment status: completed",
+        f"- Theorem status: {theorem_status}",
+        f"- Proved: {proved}/{len(rows)}",
+        f"- Unproved: {unproved}/{len(rows)}",
         f"- Elapsed: {payload['elapsed_seconds']}s",
         "",
         "| Goal | Verified | Winning strategy | Seconds |",
@@ -122,7 +162,12 @@ def main() -> int:
     MD.write_text("\n".join(lines), encoding="utf-8")
 
     print(json.dumps(payload, indent=2), flush=True)
-    return 0 if payload["verified"] == payload["total"] else 1
+    print(
+        f"Experiment completed successfully: {proved} proved, {unproved} unproved. "
+        "Unproved goals do not constitute a CI failure.",
+        flush=True,
+    )
+    return 0
 
 
 if __name__ == "__main__":
