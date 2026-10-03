@@ -44,9 +44,11 @@ elab_rules : tactic
       evalTactic seq
       let goals ← getGoals
       let mut index := 0
+      let mut report := ""
       for goal in goals do
         let state ← captureGoal index goal
-        logInfo m!"GAREEN_PROOF_STATE {toJson state |>.compress}"
+        report := report ++ s!"GAREEN_PROOF_STATE {toJson state |>.compress}\n"
         index := index + 1
+      throwError report
 
 end Gareen.ProofStateProbe
