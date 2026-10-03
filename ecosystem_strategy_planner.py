@@ -153,7 +153,7 @@ class EcosystemStrategyPlanner:
             "namespace Gareen.EcosystemGenerated",
             "",
             f"theorem {theorem_name} : {statement} := by",
-        ]
+        ])
         lines.extend(f"  {line}" for line in proof_lines)
         lines.extend([
             "",
