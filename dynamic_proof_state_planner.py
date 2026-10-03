@@ -20,6 +20,7 @@ from multi_subgoal_proof_planner import MultiSubgoalProofPlanner, RoutedBranch
 from recursive_proof_planner import audited, validate_statement
 
 _STATE_PREFIX = "GAREEN_PROOF_STATE "
+_RULE_PREFIX = "GAREEN_DECOMPOSITION_RULE "
 
 
 @dataclass(frozen=True)
@@ -86,7 +87,16 @@ class DynamicProofStatePlanner:
             ))
         return tuple(states)
 
-    def _probe(self, *, theorem_name: str, statement: str, tactic: str, timeout: float) -> tuple[tuple[DynamicSubgoal, ...], str, str, int]:
+    @staticmethod
+    def _parse_rule(output: str) -> Optional[str]:
+        for line in output.splitlines():
+            if _RULE_PREFIX in line:
+                rule = line.split(_RULE_PREFIX, 1)[1].strip()
+                if rule:
+                    return rule
+        return None
+
+    def _probe(self, *, theorem_name: str, statement: str, timeout: float) -> tuple[Optional[str], tuple[DynamicSubgoal, ...], str, str, int]:
         self.generated_dir.mkdir(parents=True, exist_ok=True)
         path = self.generated_dir / f"{theorem_name}_probe.lean"
         intro_names = _context_intro_names(statement)
@@ -100,7 +110,7 @@ class DynamicProofStatePlanner:
         ]
         if intro_names:
             lines.append("  intro " + " ".join(intro_names))
-        lines.append(f"  gareen_probe {tactic}")
+        lines.append("  gareen_probe_auto")
         lines.extend(["", "end Gareen.DynamicProbeGenerated", ""])
         path.write_text("\n".join(lines), encoding="utf-8")
         try:
@@ -116,27 +126,25 @@ class DynamicProofStatePlanner:
             out, err, rc = _txt(exc.stdout), _txt(exc.stderr) + "\nProbe timed out.", 124
         path.with_suffix(".stdout.log").write_text(out, encoding="utf-8")
         path.with_suffix(".stderr.log").write_text(err, encoding="utf-8")
-        return self._parse_states(out + "\n" + err), out, err, rc
+        combined = out + "\n" + err
+        return self._parse_rule(combined), self._parse_states(combined), out, err, rc
 
     def prove(self, statement: str, *, theorem_name: str = "gareen_dynamic_goal", total_budget_seconds: float = 240.0) -> DynamicProofStateResult:
         started = time.monotonic()
         statement = validate_statement(statement)
         prefix = _prefix_from_statement(statement)
 
-        decomposition_candidates = ("constructor",)
         chosen: Optional[str] = None
         states: tuple[DynamicSubgoal, ...] = ()
-        for tactic in decomposition_candidates:
-            remaining = total_budget_seconds - (time.monotonic() - started)
-            if remaining <= 5:
-                break
-            probed, _, _, _ = self._probe(
-                theorem_name=theorem_name, statement=statement, tactic=tactic,
-                timeout=min(20.0, remaining),
+        remaining = total_budget_seconds - (time.monotonic() - started)
+        if remaining > 5:
+            rule, probed, _, _, _ = self._probe(
+                theorem_name=theorem_name,
+                statement=statement,
+                timeout=min(25.0, remaining),
             )
-            if len(probed) >= 2 and all(s.target for s in probed):
-                chosen, states = tactic, probed
-                break
+            if rule is not None and len(probed) >= 2 and all(s.target for s in probed):
+                chosen, states = rule, probed
 
         if chosen is None:
             return DynamicProofStateResult(
@@ -188,7 +196,7 @@ class DynamicProofStatePlanner:
         lines.append(f"theorem {theorem_name} : {statement} := by")
         if intro_names:
             lines.append("  intro " + " ".join(intro_names))
-        lines.append(f"  {chosen}")
+        lines.append(f"  apply {chosen}")
         for helper, branch_statement in zip(helper_names, branch_statements):
             names = _context_intro_names(branch_statement)
             call = helper + (" " + " ".join(names) if names else "")
