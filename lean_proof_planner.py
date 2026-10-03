@@ -172,6 +172,28 @@ def _intro_names(binders: str) -> tuple[str, ...]:
     return names
 
 
+def _count_top_level_implications(body: str) -> int:
+    """Count implication binders available to `intro` at the outer proof level."""
+    count = 0
+    rest = body.strip()
+    while True:
+        split = _split_top_level(rest, "→")
+        if split is None:
+            break
+        _, rest = split
+        count += 1
+    return count
+
+
+def _context_intro_names(statement: str) -> tuple[str, ...]:
+    """Create stable names for all forall binders and outer implication hypotheses."""
+    binders, body = _split_forall(statement)
+    names = list(_intro_names(binders))
+    implication_count = _count_top_level_implications(body)
+    names.extend(f"h{index + 1}" for index in range(implication_count))
+    return tuple(names)
+
+
 def decompose_dvd_add(statement: str) -> Optional[DvdAddDecomposition]:
     """Recognize a top-level natural-number goal of the form d ∣ x + y."""
 
@@ -215,16 +237,21 @@ def _render_source(theorem_name: str, statement: str, proof_lines: tuple[str, ..
 
 
 def _extract_suggestions(stdout: str, stderr: str) -> tuple[str, ...]:
-    """Extract both one-line and current multiline Lean `Try this` messages."""
+    """Extract Lean proof suggestions from both success and failure diagnostics."""
 
     suggestions: list[str] = []
     lines = (stdout + "\n" + stderr).splitlines()
 
+    markers = (
+        "Try this:",
+        "found a proof, but the corresponding tactic failed:",
+    )
     for index, line in enumerate(lines):
-        if "Try this:" not in line:
+        marker = next((m for m in markers if m in line), None)
+        if marker is None:
             continue
 
-        tail = line.split("Try this:", 1)[1].strip()
+        tail = line.split(marker, 1)[1].strip()
         if tail:
             suggestion = tail
         else:
@@ -233,8 +260,6 @@ def _extract_suggestions(stdout: str, stderr: str) -> tuple[str, ...]:
                 candidate = following.strip()
                 if not candidate:
                     continue
-                # Lean 4.34 currently prefixes exact? suggestions with
-                # annotations such as `[apply]`.
                 candidate = re.sub(r"^\[[^]]+\]\s*", "", candidate)
                 suggestion = candidate
                 break
@@ -289,6 +314,15 @@ def _suggestion_variants(suggestion: str) -> tuple[str, ...]:
     """Generate small, generic repair variants without theorem-specific hints."""
     cleaned = re.sub(r"^\[[^]]+\]\s*", "", suggestion.strip())
     variants = [cleaned] if cleaned else []
+
+    # exact?/apply? may report a failed candidate wrapped as:
+    #   (expose_names; exact ...)
+    # Retry the inner tactic directly in the now-stable generated context.
+    if cleaned.startswith("(expose_names;") and cleaned.endswith(")"):
+        inner = cleaned[len("(expose_names;") : -1].strip()
+        if inner:
+            variants.append(inner)
+            cleaned = inner
 
     if cleaned.startswith("exact "):
         term = cleaned[len("exact ") :].strip()
@@ -449,17 +483,26 @@ class LeanProofPlanner:
             ("direct_library_retrieval", ("exact?",)),
         ]
 
-        binders, _ = _split_forall(statement)
-        intro_names = _intro_names(binders)
+        intro_names = _context_intro_names(statement)
         if intro_names:
-            strategies.append(
-                (
-                    "introduced_library_retrieval",
+            intro = "intro " + " ".join(intro_names)
+            strategies.extend(
+                [
                     (
-                        "intro " + " ".join(intro_names),
-                        "exact?",
+                        "introduced_exact_retrieval",
+                        (
+                            intro,
+                            "exact?",
+                        ),
                     ),
-                )
+                    (
+                        "introduced_apply_retrieval",
+                        (
+                            intro,
+                            "apply?",
+                        ),
+                    ),
+                ]
             )
 
         decomposition = decompose_dvd_add(statement)
