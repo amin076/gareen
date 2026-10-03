@@ -36,6 +36,8 @@ class StrategyAttempt:
     returncode: int
     elapsed_seconds: float
     timed_out: bool
+    outcome: str
+    diagnostic: str
     source_path: str
     stdout: str
     stderr: str
@@ -112,6 +114,7 @@ class EcosystemStrategyPlanner:
             ("contradiction_aesop", ("by_contra h", "aesop")),
             ("split_grind", ("constructor <;> grind",)),
             ("split_aesop", ("constructor <;> aesop",)),
+            ("library_search", ("library_search",)),
             ("exact_search", ("exact?",)),
             ("apply_search", ("apply?",)),
         ]
@@ -163,6 +166,67 @@ class EcosystemStrategyPlanner:
             "",
         ])
         return "\n".join(lines)
+
+    @staticmethod
+    def _classify_attempt(
+        *,
+        verified: bool,
+        returncode: int,
+        timed_out: bool,
+        stdout: str,
+        stderr: str,
+    ) -> tuple[str, str]:
+        """Separate proof failure from integration/infrastructure failure."""
+        text = (stdout + "\n" + stderr).lower()
+
+        if verified:
+            return "SUCCESS", "Lean accepted the proof and the axiom audit passed."
+        if timed_out or returncode == 124:
+            return "TIMEOUT", "The strategy exceeded its allotted execution time."
+
+        import_markers = (
+            "unknown module",
+            "unknown package",
+            "invalid import",
+            "failed to load",
+            "object file",
+            "no such file or directory",
+        )
+        if any(marker in text for marker in import_markers):
+            return "IMPORT_ERROR", "Lean could not load a required module or package."
+
+        compile_markers = (
+            "unexpected token",
+            "invalid syntax",
+            "parser error",
+            "declaration has metavariables",
+            "type mismatch",
+            "unknown identifier",
+            "application type mismatch",
+        )
+        if any(marker in text for marker in compile_markers):
+            return "LEAN_COMPILE_ERROR", "Generated Lean source did not compile cleanly."
+
+        tactic_markers = (
+            "failed to find proof",
+            "tactic",
+            "unsolved goals",
+            "could not prove",
+            "could not close the goal",
+            "made no progress",
+            "failed to close",
+        )
+        if returncode != 0 and any(marker in text for marker in tactic_markers):
+            return "TACTIC_FAILED", "Lean ran the tactic, but it did not close the theorem."
+
+        if returncode == 0:
+            return "AUDIT_REJECTED", (
+                "Lean exited successfully, but Gareen's proof/axiom audit rejected the result."
+            )
+
+        return "INFRASTRUCTURE_ERROR", (
+            "The attempt failed outside the normal theorem-not-proved path."
+        )
 
     def _run_strategy(
         self,
@@ -216,12 +280,21 @@ class EcosystemStrategyPlanner:
         # Same trust rule as Gareen recursive search: compiler success plus
         # explicit axiom audit allowlist.
         verified = audited(out + "\n" + err, rc)
+        outcome, diagnostic = self._classify_attempt(
+            verified=verified,
+            returncode=rc,
+            timed_out=timed_out,
+            stdout=out,
+            stderr=err,
+        )
         return StrategyAttempt(
             strategy=strategy,
             verified=verified,
             returncode=rc,
             elapsed_seconds=elapsed,
             timed_out=timed_out,
+            outcome=outcome,
+            diagnostic=diagnostic,
             source_path=str(path),
             stdout=out,
             stderr=err,
