@@ -1896,3 +1896,126 @@ one solver among several, selected when the subgoal shape matches its strengths.
 The next research step is to generalize from top-level conjunction splitting to
 explicit Lean proof-state extraction and recursive routing of dynamically
 generated subgoals.
+
+
+---
+
+# Part XXIV — Lean-native dynamic proof-state decomposition
+
+Phase 19.6 removes the top-level conjunction parser from the decomposition
+decision. Gareen now asks Lean itself to discover a decomposition rule from the
+live proof state.
+
+## Lean-side proof-state probe
+
+`Gareen/ProofStateProbe.lean` now provides `gareen_probe_auto`.
+
+For the active goal it:
+1. reads the target from Lean's metavariable context;
+2. asks the target type for its constructors;
+3. transactionally applies candidate constructors;
+4. accepts a candidate only when Lean actually produces at least two residual
+   proof obligations;
+5. falls back to a small bounded library-search candidate set only when the
+   target constructors do not provide a useful decomposition;
+6. emits the selected rule and every child proof state, including each child's
+   local context and target.
+
+The Python orchestrator therefore no longer says `constructor` or parses
+`A ∧ B` to decide how to split the theorem.
+
+## Validated run
+
+Target:
+
+```text
+∀ d a b m n : Nat,
+  d ∣ a →
+  d ∣ b →
+  m ≤ n →
+  ((m + 7 ≤ n + 7) ∧ d ∣ a + b)
+```
+
+The direct unsplit ecosystem baseline remained unproved.
+
+Lean dynamically emitted:
+
+```text
+GAREEN_DECOMPOSITION_RULE And.intro
+```
+
+and two actual proof states:
+
+```text
+Subgoal 0: m + 7 ≤ n + 7
+Subgoal 1: d ∣ a + b
+```
+
+with the full local context:
+
+```text
+d a b m n : Nat
+h1 : d ∣ a
+h2 : d ∣ b
+h3 : m ≤ n
+```
+
+Gareen then routed the Lean-emitted states independently:
+
+- subgoal 0 -> `lean_mathlib_ecosystem / grind`
+- subgoal 1 -> `gareen_advanced / recursive_library_search`
+
+Both branches verified.
+
+The helper theorem statements were reconstructed from the *actual locals emitted
+by Lean*, rather than from the original theorem prefix. The final proof was then
+assembled with the rule Lean had discovered:
+
+```lean
+apply And.intro
+· exact ...
+· exact ...
+```
+
+Final result:
+
+- dynamic verified: **true**
+- assembly return code: `0`
+- final Lean axiom audit: **passed**
+- total dynamic proof time: about **64.6s**
+- direct unsplit baseline: **unproved**
+
+## Architectural milestone
+
+The demonstrated pipeline is now:
+
+```text
+live Lean proof state
+  -> Lean discovers decomposition candidate
+  -> Lean emits real child metavariable states
+  -> Gareen reads each child's locals + target
+  -> Gareen routes children to heterogeneous providers
+  -> providers produce independently verified helper proofs
+  -> Gareen re-applies Lean's discovered rule
+  -> Gareen inserts the helper proofs
+  -> final Lean kernel / axiom audit
+```
+
+This is materially different from the earlier Phase 19.5 system, where Python
+recognized a known top-level conjunction pattern.
+
+## Current limitation
+
+This is not yet a claim of arbitrary proof-state orchestration.
+
+Current automatic decomposition discovery is bounded:
+- target-type constructors are preferred;
+- only a limited number of indexed library-search declarations are considered
+  as fallback;
+- provider routing still uses lightweight target-shape heuristics;
+- local names emitted by Lean are reused when constructing helper theorems.
+
+The next generalization is recursive dynamic orchestration: after a routed
+provider applies a lemma and creates *new* subgoals, those child proof states
+should return to the same Gareen routing loop instead of remaining inside one
+provider.
