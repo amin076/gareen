@@ -42,6 +42,7 @@ _IDENT_RE = re.compile(r"(?:exact|apply)\s+\(?([A-Za-z_][A-Za-z0-9_'.]*)")
 _QUALIFIED_CONST_RE = re.compile(
     r"\b(?:[A-Za-z_][A-Za-z0-9_']*\.)+[A-Za-z_][A-Za-z0-9_']*\b"
 )
+_AXIOMS_RE = re.compile(r"depends on axioms:\s*\[([^]]*)\]", re.S)
 
 
 @dataclass(frozen=True)
@@ -222,6 +223,19 @@ def decompose_dvd_add(statement: str) -> Optional[DvdAddDecomposition]:
     )
 
 
+def _planner_audited(output: str, returncode: int) -> bool:
+    """Require a compiled theorem with no sorry/admit and only allowed axioms."""
+    if returncode != 0 or "declaration uses `sorry`" in output or "sorryAx" in output:
+        return False
+    matches = _AXIOMS_RE.findall(output)
+    if "does not depend on any axioms" in output:
+        matches.append("")
+    if len(matches) != 1:
+        return False
+    axioms = {a.strip() for a in matches[0].split(",") if a.strip()}
+    return axioms <= {"propext", "Classical.choice", "Quot.sound"}
+
+
 def _render_source(theorem_name: str, statement: str, proof_lines: tuple[str, ...]) -> str:
     name = _safe_identifier(theorem_name)
     lines = [
@@ -232,7 +246,13 @@ def _render_source(theorem_name: str, statement: str, proof_lines: tuple[str, ..
         f"theorem {name} : {statement} := by",
     ]
     lines.extend(f"  {line}" if line else "" for line in proof_lines)
-    lines.extend(["", "end Gareen.GeneratedPlanner", ""])
+    lines.extend([
+        "",
+        f"#print axioms Gareen.GeneratedPlanner.{name}",
+        "",
+        "end Gareen.GeneratedPlanner",
+        "",
+    ])
     return "\n".join(lines)
 
 
@@ -397,9 +417,10 @@ class LeanProofPlanner:
 
         elapsed = time.monotonic() - started
         suggestions = _extract_suggestions(stdout, stderr)
+        verified = _planner_audited(stdout + "\n" + stderr, returncode)
         return PlannerAttempt(
             strategy=strategy,
-            verified=returncode == 0,
+            verified=verified,
             returncode=returncode,
             elapsed_seconds=round(elapsed, 3),
             timed_out=timed_out,
