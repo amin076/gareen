@@ -108,6 +108,8 @@ def main() -> int:
                     "timed_out": a.timed_out,
                     "returncode": a.returncode,
                     "elapsed_seconds": a.elapsed_seconds,
+                    "stdout": a.stdout,
+                    "stderr": a.stderr,
                 }
                 for a in result.attempts
             ],
@@ -123,6 +125,15 @@ def main() -> int:
             f"elapsed={result.elapsed_seconds}s",
             flush=True,
         )
+        if not result.verified:
+            for attempt in result.attempts:
+                detail = (attempt.stderr or attempt.stdout).strip()
+                if detail:
+                    print(
+                        f"[diagnostic] {name}/{attempt.strategy} "
+                        f"rc={attempt.returncode}: {detail[:2000]}",
+                        flush=True,
+                    )
 
     proved = sum(r["verified"] for r in rows)
     unproved = len(rows) - proved
