@@ -45,6 +45,27 @@ class DynamicProofStateResult:
     elapsed_seconds: float
 
 
+def _branch_statement_from_state(state: DynamicSubgoal) -> str:
+    """Rebuild a standalone branch theorem from Lean's actual local context."""
+    if not state.locals:
+        return state.target
+    binders = " ".join(
+        f"({fact['name']} : {fact['type']})"
+        for fact in state.locals
+        if fact.get("name") and fact.get("type")
+    )
+    return f"∀ {binders}, {state.target}" if binders else state.target
+
+
+def _helper_call_from_state(helper: str, state: DynamicSubgoal) -> str:
+    names = [
+        str(fact.get("name", "")).strip()
+        for fact in state.locals
+        if str(fact.get("name", "")).strip()
+    ]
+    return helper + (" " + " ".join(names) if names else "")
+
+
 def _prefix_from_statement(statement: str) -> str:
     binders, body = _split_forall(statement)
     antecedents: list[str] = []
@@ -132,7 +153,10 @@ class DynamicProofStatePlanner:
     def prove(self, statement: str, *, theorem_name: str = "gareen_dynamic_goal", total_budget_seconds: float = 240.0) -> DynamicProofStateResult:
         started = time.monotonic()
         statement = validate_statement(statement)
-        prefix = _prefix_from_statement(statement)
+        # The original prefix is no longer used for branch construction.
+        # Each branch theorem is reconstructed from the exact locals emitted by
+        # Lean for that proof state.
+        _ = _prefix_from_statement(statement)
 
         chosen: Optional[str] = None
         states: tuple[DynamicSubgoal, ...] = ()
@@ -158,7 +182,7 @@ class DynamicProofStatePlanner:
         each_budget = remaining_total / len(states)
 
         for state in states:
-            branch_statement = f"{prefix} {state.target}".strip()
+            branch_statement = _branch_statement_from_state(state)
             branch, proof = self.router._solve_branch(
                 name=f"{theorem_name}_dynamic_{state.index}",
                 statement=branch_statement,
@@ -177,7 +201,7 @@ class DynamicProofStatePlanner:
         path = self.generated_dir / f"{theorem_name}_assembled.lean"
         intro_names = _context_intro_names(statement)
         helper_names = [f"{theorem_name}_helper_{i}" for i in range(len(states))]
-        branch_statements = [f"{prefix} {s.target}".strip() for s in states]
+        branch_statements = [_branch_statement_from_state(s) for s in states]
 
         lines = [
             "import Mathlib",
@@ -197,10 +221,8 @@ class DynamicProofStatePlanner:
         if intro_names:
             lines.append("  intro " + " ".join(intro_names))
         lines.append(f"  apply {chosen}")
-        for helper, branch_statement in zip(helper_names, branch_statements):
-            names = _context_intro_names(branch_statement)
-            call = helper + (" " + " ".join(names) if names else "")
-            lines.append(f"  · exact {call}")
+        for helper, state in zip(helper_names, states):
+            lines.append(f"  · exact {_helper_call_from_state(helper, state)}")
         lines.extend([
             "",
             f"#print axioms Gareen.DynamicAssembled.{theorem_name}",
