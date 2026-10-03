@@ -1,12 +1,13 @@
 """Phase 19.5 heterogeneous multi-subgoal orchestration benchmark.
 
 The theorem deliberately combines two branches with different proof character:
-1. a Fermat-style prime/power existential branch;
-2. a divisibility-over-addition branch.
+1. a monotone-arithmetic branch expected to be handled by a standard tactic;
+2. a divisibility-over-addition branch routed first to Gareen's recursive prover.
 
-Gareen must split the conjunction, route the branches independently, allow its
-own recursive prover to compete, and finally assemble the two accepted branch
-proofs into one Lean-verified theorem.
+The experiment also runs an unsplit ecosystem-only baseline first.  The key
+success condition is that the direct whole-theorem baseline does not verify,
+while split routing proves both branches with different providers and the final
+assembled theorem passes Lean's axiom audit.
 """
 from __future__ import annotations
 
@@ -21,16 +22,16 @@ import time
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+from ecosystem_strategy_planner import EcosystemStrategyPlanner
 from multi_subgoal_proof_planner import MultiSubgoalProofPlanner
 
 NAME = "phase19_multi_provider"
 STATEMENT = (
-    "∀ p a d x y : Nat, "
-    "Nat.Prime p → "
-    "¬ p ∣ a → "
-    "d ∣ x → "
-    "d ∣ y → "
-    "((∃ k : Nat, a ^ (p - 1) = k * p + 1) ∧ d ∣ x + y)"
+    "∀ d a b m n : Nat, "
+    "d ∣ a → "
+    "d ∣ b → "
+    "m ≤ n → "
+    "((m + 7 ≤ n + 7) ∧ d ∣ a + b)"
 )
 
 OUT = ROOT / ".gareen/phase19-multi-subgoal.json"
@@ -59,20 +60,41 @@ def main() -> int:
     OUT.parent.mkdir(parents=True, exist_ok=True)
     require_lean_toolchain()
 
-    planner = MultiSubgoalProofPlanner(ROOT)
     started = time.monotonic()
+
+    # Control: try the whole conjunction without Gareen recursive fallback.
+    # If this succeeds directly, subgoal routing did not add evidence.
+    baseline_planner = EcosystemStrategyPlanner(
+        ROOT,
+        per_strategy_timeout=8,
+        gareen_timeout=20,
+        gareen_nodes=1200,
+    )
+    baseline = baseline_planner.prove(
+        STATEMENT,
+        theorem_name=NAME + "_baseline",
+        wall_clock_budget_seconds=55,
+        stop_on_first_success=True,
+        use_gareen_fallback=False,
+    )
+
+    planner = MultiSubgoalProofPlanner(ROOT)
     result = planner.prove(
         STATEMENT,
         theorem_name=NAME,
-        total_budget_seconds=300,
+        total_budget_seconds=180,
     )
 
     payload = asdict(result)
     payload.update({
+        "direct_baseline_verified": baseline.verified,
+        "direct_baseline_strategy": baseline.winning_strategy,
+        "direct_baseline_layer": baseline.layer,
+        "direct_baseline_elapsed_seconds": baseline.elapsed_seconds,
         "experiment_status": "completed",
         "theorem_status": "proved" if result.verified else "unproved",
         "hard_job_cap_minutes": 10,
-        "proof_budget_seconds": 300,
+        "proof_budget_seconds": 235,
         "experiment_elapsed_seconds": round(time.monotonic() - started, 3),
     })
     OUT.write_text(json.dumps(payload, indent=2), encoding="utf-8")
@@ -85,7 +107,10 @@ def main() -> int:
         f"- Theorem status: {payload['theorem_status']}",
         f"- Total elapsed: {result.elapsed_seconds}s",
         "- GitHub job hard cap: 10 minutes",
-        "- Proof budget: 300s",
+        "- Total proof budget: 235s (55s direct baseline + 180s split routing)",
+        f"- Direct baseline verified: {baseline.verified}",
+        f"- Direct baseline winner: {baseline.winning_strategy or '-'}",
+        f"- Direct baseline layer: {baseline.layer or '-'}",
         "",
         "## Routed branches",
         "",
@@ -109,6 +134,9 @@ def main() -> int:
 
     print(json.dumps({
         "verified": result.verified,
+        "direct_baseline_verified": baseline.verified,
+        "direct_baseline_strategy": baseline.winning_strategy,
+        "direct_baseline_layer": baseline.layer,
         "theorem_status": payload["theorem_status"],
         "elapsed_seconds": result.elapsed_seconds,
         "branches": [
