@@ -326,9 +326,17 @@ class EcosystemStrategyPlanner:
         started = time.monotonic()
         attempts: list[StrategyAttempt] = []
 
+        # Do not let one-shot tactics consume the entire theorem budget.
+        # Reserve time for feedback-aware planning, which can use partial Lean
+        # suggestions as the next proof-search state.
+        feedback_reserve = min(
+            max(30.0, self.per_strategy_timeout * 3.0),
+            max(30.0, wall_clock_budget_seconds * 0.4),
+        )
+
         for index, (strategy, proof_lines) in enumerate(self._strategies(statement)):
             remaining = wall_clock_budget_seconds - (time.monotonic() - started)
-            if remaining <= 0:
+            if remaining <= feedback_reserve:
                 break
             attempt = self._run_strategy(
                 theorem_name=f"{theorem_name}_{index}",
@@ -361,7 +369,7 @@ class EcosystemStrategyPlanner:
             feedback_result = self.feedback.prove(
                 statement,
                 theorem_name=theorem_name + "_feedback",
-                wall_clock_budget_seconds=min(remaining, max(30.0, self.per_strategy_timeout * 4)),
+                wall_clock_budget_seconds=remaining,
                 per_attempt_timeout_seconds=max(10, int(self.per_strategy_timeout)),
             )
             if feedback_result.verified:
