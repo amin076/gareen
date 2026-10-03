@@ -1539,3 +1539,111 @@ continued the proof process.
 Even if that first target still requires additional repair rules, the design
 establishes the reusable feedback channel needed for later subgoal routing,
 lemma-signature inspection, proof-state exchange, and cross-prover orchestration.
+
+
+---
+
+# Part XX — Context-aware feedback validation
+
+
+## Phase 19.2 — context-aware feedback loop validated
+
+A second feedback-loop iteration fixed two concrete orchestration defects.
+
+First, Gareen's suggestion parser had only consumed Lean messages beginning with
+`Try this:`.  The failing divisibility benchmark used a different diagnostic:
+
+```text
+found a proof, but the corresponding tactic failed:
+  (expose_names; exact ...)
+```
+
+That diagnostic is now parsed as solver feedback.
+
+Second, the planner had been querying retrieval before introducing the theorem's
+outer variables and implication hypotheses into the local context.  Gareen now
+builds stable context names for both forall binders and outer implication
+hypotheses, then retries `exact?` and `apply?` after `intro`.  For the
+divisibility theorem this changes the proof state from the whole quantified
+statement to the useful local state:
+
+```text
+d a b : Nat
+h1 : d ∣ a
+h2 : d ∣ b
+⊢ d ∣ a + b
+```
+
+A third scheduling defect was then found: the one-shot ecosystem cascade could
+consume the entire per-theorem wall-clock budget before the feedback planner was
+invoked.  Phase 19.2 therefore reserves a bounded portion of each theorem budget
+for feedback-aware planning.
+
+### Five-medium validation
+
+After these fixes, the ecosystem-only five-medium diagnostic improved from 4/5
+to **5/5 verified**:
+
+| Goal | Verified | Winning layer/strategy |
+| --- | --- | --- |
+| Nat monotone addition | yes | `grind` |
+| Int quadratic identity | yes | `grind` |
+| consecutive gcd | yes | `aesop` |
+| common divisor divides a sum | yes | `lean_feedback_loop / feedback_introduced_exact_retrieval` |
+| propositional implication chain | yes | `grind` |
+
+The previously missed theorem
+
+```text
+∀ d a b : Nat, d ∣ a → d ∣ b → d ∣ a + b
+```
+
+was therefore closed by the new feedback layer itself, with Gareen recursive
+fallback disabled in this experiment.
+
+This is the first controlled demonstration that Gareen can obtain value from a
+solver response that is not already a complete one-shot success: it changes the
+proof context, re-runs retrieval, and obtains a Lean-verified result.
+
+### Hard frontier validation
+
+The same repair also closed the previously unproved double-coprime frontier:
+
+```text
+∀ n : Nat,
+  Nat.gcd n (2 * n + 1) = 1 ∧
+  Nat.gcd (n + 1) (2 * n + 1) = 1
+```
+
+Result:
+
+```text
+verified = True
+winning_strategy = feedback_introduced_apply_retrieval
+layer = lean_feedback_loop
+```
+
+No Gareen recursive fallback was required for this accepted result.
+
+This is stronger evidence than the five-medium recovery because this theorem had
+previously remained outside the demonstrated coverage of the one-shot ecosystem
+portfolio.
+
+### Interpretation
+
+The validated contribution is not a new trusted kernel and not a replacement for
+Mathlib tactics.  The demonstrated Gareen capability is **proof orchestration**:
+
+```text
+goal
+  -> one-shot solver attempts
+  -> expose local proof context
+  -> consume retrieval/prover feedback
+  -> transform the next proof attempt
+  -> retry under a reserved resource budget
+  -> Lean kernel verification
+```
+
+The immediate next research direction is to generalize this from textual
+suggestion repair to explicit proof-state/subgoal routing and cross-solver
+checkpoint exchange.
