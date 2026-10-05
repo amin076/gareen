@@ -1,0 +1,26 @@
+name: ChatGPT Melakat generation 2
+
+on:
+  push:
+    branches: [experiment/ai-parent-conjectures-100]
+    paths:
+      - experiments/chatgpt_melakat_generation_2.py
+      - .github/workflows/chatgpt-melakat-generation-2.yml
+  workflow_dispatch:
+
+jobs:
+  generation-2:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Evaluate 400 generation-2 conjectures in Gareen
+        run: PYTHONPATH=. python experiments/chatgpt_melakat_generation_2.py
+      - name: Upload generation-2 verified batch
+        uses: actions/upload-artifact@v4
+        with:
+          name: gareen-generation-2-verified
+          path: outputs/gareen_generation_2_verified.json
