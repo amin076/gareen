@@ -1,0 +1,46 @@
+name: ChatGPT Melakat generation 3
+on:
+  push:
+    branches: [experiment/ai-parent-conjectures-100]
+    paths:
+      - experiments/chatgpt_melakat_generation_3.py
+      - .github/workflows/chatgpt-melakat-generation-3.yml
+  workflow_dispatch:
+jobs:
+  generation-3:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Evaluate 400 generation-3 conjectures in Gareen
+        run: PYTHONPATH=. python experiments/chatgpt_melakat_generation_3.py
+      - name: Checkout Melakat
+        uses: actions/checkout@v4
+        with:
+          repository: amin076/melakat
+          ref: experiment/gareen-chatgpt-five-generations
+          path: melakat
+      - name: Install Melakat
+        run: pip install -e melakat/desktop
+      - name: Automatically hand verified generation 3 to Melakat
+        run: |
+          python melakat/experiments/gareen_ai_generation_cycle.py \
+            --verified-batch outputs/gareen_generation_3_verified.json \
+            --generation 3 \
+            --max-population 20 \
+            --energy-input 100 \
+            --ticks 5 \
+            --output outputs/melakat_generation_3_handoff.json
+      - name: Upload generation-4 parent handoff
+        uses: actions/upload-artifact@v4
+        with:
+          name: melakat-generation-3-next-parents
+          path: outputs/melakat_generation_3_handoff.json
+      - name: Upload generation-3 verified batch
+        uses: actions/upload-artifact@v4
+        with:
+          name: gareen-generation-3-verified
+          path: outputs/gareen_generation_3_verified.json
