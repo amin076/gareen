@@ -191,7 +191,7 @@ def main():
     assert all(len(items) == 20 for items in families.values())
 
     rows = []
-    proof_budget = 20
+    proof_budget = 100
     proof_attempts = 0
     for parent, specs in families.items():
         for idx, (left, right, variables) in enumerate(specs, 1):
@@ -226,7 +226,7 @@ def main():
         counts["proved_and_accepted"] += int(r["proved"] and r["accepted"])
 
     print("AI_PARENT_NEIGHBORHOOD_EXPERIMENT")
-    print("parents=5 candidates=100 candidates_per_parent=20 proof_budget=20")
+    print("parents=5 candidates=100 candidates_per_parent=20 proof_budget=100")
     print(f"proof_attempts={proof_attempts}")
     for key in ("total","sample_pass","sample_fail","research_accepted","research_rejected","proved","unproved","proved_and_accepted"):
         print(f"{key}={counts[key]}")
