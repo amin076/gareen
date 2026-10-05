@@ -205,7 +205,7 @@ def main():
                 "accepted": assessment.accepted,
                 "reason": assessment.reason,
                 "proved": proved,
-                "strategy": result.strategy,
+                "strategy": result.strategy if result is not None else "sample-rejected",
             })
 
     counts = Counter()
