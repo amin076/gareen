@@ -4,6 +4,8 @@ The candidate families in this file were authored outside Gareen's classical
 grammar generator. Gareen remains responsible for scoring and proof attempts.
 """
 from collections import Counter, defaultdict
+import json
+from pathlib import Path
 
 from artificial_mathematician import ResearchConjecture, StrategySelector, InductionSynthesizer
 from proof_search import BoundedProofSearcher
@@ -253,6 +255,31 @@ def main():
     for r in rows:
         if r["proved"] and r["accepted"]:
             print(f'{r["parent"]}#{r["index"]:02d} value={r["value"]} strategy={r["strategy"]} :: {r["statement"]}')
+
+    verified_batch = {
+        "source": "gareen-ai-parent-neighborhood-100",
+        "candidates": [
+            {
+                "id": f'{r["parent"]}_C{r["index"]:02d}',
+                "parent_id": r["parent"],
+                "parent_ids": [r["parent"]],
+                "statement": r["statement"],
+                "generation": 1,
+                "lineage_id": r["parent"],
+                "mathematical_value": r["value"],
+                "research_accepted": r["accepted"],
+                "proof_status": "verified",
+                "value_components": {"gareen_research_value": r["value"]},
+                "proof_strategy": r["strategy"],
+            }
+            for r in rows if r["proved"]
+        ],
+    }
+    output_path = Path("outputs/gareen_verified_batch.json")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(json.dumps(verified_batch, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(f"VERIFIED_BATCH_PATH={output_path}")
+    print(f"VERIFIED_BATCH_COUNT={len(verified_batch['candidates'])}")
 
     print("\nUNPROVED_SAMPLE_PASS_TOP")
     pending = sorted((r for r in rows if r["sample_pass"] and not r["proved"]), key=lambda r: -r["value"])
