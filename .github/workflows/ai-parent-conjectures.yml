@@ -25,4 +25,4 @@ jobs:
         with:
           python-version: "3.12"
       - name: Run 100 AI-authored parent-neighborhood conjectures
-        run: python experiments/ai_parent_conjectures_100.py
+        run: PYTHONPATH=. python experiments/ai_parent_conjectures_100.py
