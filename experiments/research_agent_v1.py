@@ -35,7 +35,7 @@ def mutations(l,r,vs):
       (Mul(l,ONE),Mul(r,ONE)),(Mul(ONE,l),Mul(ONE,r)),(Add(l,ONE),Add(r,ONE)),
       (Add(ONE,l),Add(ONE,r)),(Add(l,a),Add(r,a)),(Add(a,l),Add(a,r)),
       (Mul(l,a),Mul(r,a)),(Mul(a,l),Mul(a,r)),(Add(Succ(l),b),Add(Succ(r),b)),
-      (Add(b,Succ(l)),Add(b,Succ(r)),(Mul(Succ(l),ONE),Mul(Succ(r),ONE)),
+      (Add(b,Succ(l)),Add(b,Succ(r))),(Mul(Succ(l),ONE),Mul(Succ(r),ONE)),
       (Add(Add(l,a),b),Add(Add(r,a),b)),(Mul(Mul(l,ONE),a),Mul(Mul(r,ONE),a)),
       (Succ(l),r),(Add(l,ONE),r),(l,Succ(r)),(Mul(l,ZERO),r)]
 
