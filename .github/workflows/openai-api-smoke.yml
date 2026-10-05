@@ -1,0 +1,41 @@
+name: OpenAI API smoke test
+
+on:
+  push:
+    branches:
+      - experiment/openai-api-smoke
+    paths:
+      - ".github/workflows/openai-api-smoke.yml"
+      - "experiments/openai_api_smoke.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  openai-api-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      OPENAI_SMOKE_MODEL: gpt-6-luna
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Verify secret is exposed to the job
+        shell: bash
+        run: |
+          if [ -z "$OPENAI_API_KEY" ]; then
+            echo "OPENAI_API_KEY is not available to this workflow."
+            exit 1
+          fi
+          echo "OPENAI_API_KEY is available (value not printed)."
+
+      - name: Call OpenAI Responses API once
+        run: python experiments/openai_api_smoke.py
