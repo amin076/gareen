@@ -184,7 +184,8 @@ def sample_signature(expr, variables):
 
 def main():
     state = build_initial_knowledge()
-    fast_searcher = BoundedProofSearcher(max_depth=4, max_terms=24, instantiation_rounds=1, allow_open_goals=True)\n    selector = StrategySelector(direct_searcher=fast_searcher, induction=InductionSynthesizer(searcher=fast_searcher))
+    fast_searcher = BoundedProofSearcher(max_depth=4, max_terms=24, instantiation_rounds=1, allow_open_goals=True)
+    selector = StrategySelector(direct_searcher=fast_searcher, induction=InductionSynthesizer(searcher=fast_searcher))
     families = candidate_specs()
     assert len(families) == 5
     assert all(len(items) == 20 for items in families.values())
