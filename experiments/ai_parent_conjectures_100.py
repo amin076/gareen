@@ -190,12 +190,12 @@ def main():
     assert len(families) == 5
     assert all(len(items) == 20 for items in families.values())
 
-    rows = []
+    rows = []\n    proof_budget = 20\n    proof_attempts = 0
     for parent, specs in families.items():
         for idx, (left, right, variables) in enumerate(specs, 1):
             conjecture = close_eq(left, right, variables)
             sample_pass = sample_signature(left, variables) == sample_signature(right, variables)
-            assessment = assess_research_value(conjecture, state, frontier=())
+            assessment = assess_research_value(conjecture, state, frontier=(), min_reasoning_steps=1)
             result = selector.solve(conjecture, state, lemma_budget=0)
             proved = bool(result.found and result.check and result.check.valid)
             rows.append({
@@ -207,7 +207,7 @@ def main():
                 "accepted": assessment.accepted,
                 "reason": assessment.reason,
                 "proved": proved,
-                "strategy": result.strategy if result is not None else "sample-rejected",
+                "strategy": result.strategy if result is not None else ("not-selected" if sample_pass else "sample-rejected"),
             })
 
     counts = Counter()
@@ -222,7 +222,7 @@ def main():
         counts["proved_and_accepted"] += int(r["proved"] and r["accepted"])
 
     print("AI_PARENT_NEIGHBORHOOD_EXPERIMENT")
-    print("parents=5 candidates=100 candidates_per_parent=20")
+    print("parents=5 candidates=100 candidates_per_parent=20 proof_budget=20")\n    print(f"proof_attempts={proof_attempts}")
     for key in ("total","sample_pass","sample_fail","research_accepted","research_rejected","proved","unproved","proved_and_accepted"):
         print(f"{key}={counts[key]}")
 
