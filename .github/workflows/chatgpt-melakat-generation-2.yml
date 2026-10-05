@@ -19,6 +19,28 @@ jobs:
           python-version: "3.12"
       - name: Evaluate 400 generation-2 conjectures in Gareen
         run: PYTHONPATH=. python experiments/chatgpt_melakat_generation_2.py
+      - name: Checkout Melakat evolution engine
+        uses: actions/checkout@v4
+        with:
+          repository: amin076/melakat
+          ref: experiment/gareen-chatgpt-five-generations
+          path: melakat
+      - name: Install Melakat
+        run: pip install -e melakat/desktop
+      - name: Automatically hand verified Gareen results to Melakat
+        run: |
+          python melakat/experiments/gareen_ai_generation_cycle.py \
+            --verified-batch outputs/gareen_generation_2_verified.json \
+            --generation 2 \
+            --max-population 20 \
+            --energy-input 100 \
+            --ticks 5 \
+            --output outputs/melakat_generation_2_handoff.json
+      - name: Upload Melakat parent handoff for next ChatGPT generation
+        uses: actions/upload-artifact@v4
+        with:
+          name: melakat-generation-2-next-parents
+          path: outputs/melakat_generation_2_handoff.json
       - name: Upload generation-2 verified batch
         uses: actions/upload-artifact@v4
         with:
