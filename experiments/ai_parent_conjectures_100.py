@@ -5,7 +5,8 @@ grammar generator. Gareen remains responsible for scoring and proof attempts.
 """
 from collections import Counter, defaultdict
 
-from artificial_mathematician import ResearchConjecture, StrategySelector, InductionSynthesizer\nfrom proof_search import BoundedProofSearcher
+from artificial_mathematician import ResearchConjecture, StrategySelector, InductionSynthesizer
+from proof_search import BoundedProofSearcher
 from math_world import (
     X, Y, Z, W, ZERO, ONE, Add, Mul, Succ, Eq, ForAll,
     build_initial_knowledge, normalize, substitute_expr,
