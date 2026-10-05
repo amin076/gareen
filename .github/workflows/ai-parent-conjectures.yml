@@ -26,3 +26,8 @@ jobs:
           python-version: "3.12"
       - name: Run 100 AI-authored parent-neighborhood conjectures
         run: PYTHONPATH=. python experiments/ai_parent_conjectures_100.py
+      - name: Upload verified batch for Melakat
+        uses: actions/upload-artifact@v4
+        with:
+          name: gareen-verified-batch
+          path: outputs/gareen_verified_batch.json
