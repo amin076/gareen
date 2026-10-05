@@ -18,7 +18,7 @@ jobs:
     timeout-minutes: 5
     env:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      OPENAI_SMOKE_MODEL: gpt-6-luna
+      OPENAI_SMOKE_MODEL: gpt-5.6-luna
     steps:
       - name: Checkout
         uses: actions/checkout@v4
