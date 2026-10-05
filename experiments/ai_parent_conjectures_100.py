@@ -5,7 +5,7 @@ grammar generator. Gareen remains responsible for scoring and proof attempts.
 """
 from collections import Counter, defaultdict
 
-from artificial_mathematician import ResearchConjecture, StrategySelector
+from artificial_mathematician import ResearchConjecture, StrategySelector, InductionSynthesizer\nfrom proof_search import BoundedProofSearcher
 from math_world import (
     X, Y, Z, W, ZERO, ONE, Add, Mul, Succ, Eq, ForAll,
     build_initial_knowledge, normalize, substitute_expr,
@@ -183,7 +183,7 @@ def sample_signature(expr, variables):
 
 def main():
     state = build_initial_knowledge()
-    selector = StrategySelector()
+    fast_searcher = BoundedProofSearcher(max_depth=4, max_terms=24, instantiation_rounds=1, allow_open_goals=True)\n    selector = StrategySelector(direct_searcher=fast_searcher, induction=InductionSynthesizer(searcher=fast_searcher))
     families = candidate_specs()
     assert len(families) == 5
     assert all(len(items) == 20 for items in families.values())
