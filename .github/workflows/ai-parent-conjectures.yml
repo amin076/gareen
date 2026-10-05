@@ -8,6 +8,12 @@ on:
     paths:
       - experiments/ai_parent_conjectures_100.py
       - .github/workflows/ai-parent-conjectures.yml
+  pull_request:
+    branches:
+      - phase19-ecosystem-strategies
+    paths:
+      - experiments/ai_parent_conjectures_100.py
+      - .github/workflows/ai-parent-conjectures.yml
 
 jobs:
   experiment:
