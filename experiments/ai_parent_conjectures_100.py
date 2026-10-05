@@ -184,7 +184,7 @@ def sample_signature(expr, variables):
 
 def main():
     state = build_initial_knowledge()
-    fast_searcher = BoundedProofSearcher(max_depth=4, max_terms=24, instantiation_rounds=1, allow_open_goals=True)
+    fast_searcher = BoundedProofSearcher(max_depth=8, max_terms=80, instantiation_rounds=2, max_direct_facts=20000, allow_open_goals=True)
     selector = StrategySelector(direct_searcher=fast_searcher, induction=InductionSynthesizer(searcher=fast_searcher))
     families = candidate_specs()
     assert len(families) == 5
@@ -199,7 +199,7 @@ def main():
             sample_pass = sample_signature(left, variables) == sample_signature(right, variables)
             assessment = assess_research_value(conjecture, state, frontier=(), min_reasoning_steps=1)
             eligible_for_proof = sample_pass and proof_attempts < proof_budget
-            result = selector.solve(conjecture, state, lemma_budget=0) if eligible_for_proof else None
+            result = selector.solve(conjecture, state, lemma_budget=4) if eligible_for_proof else None
             proof_attempts += int(eligible_for_proof)
             proved = bool(result and result.found and result.check and result.check.valid)
             rows.append({
@@ -226,7 +226,7 @@ def main():
         counts["proved_and_accepted"] += int(r["proved"] and r["accepted"])
 
     print("AI_PARENT_NEIGHBORHOOD_EXPERIMENT")
-    print("parents=5 candidates=100 candidates_per_parent=20 proof_budget=100")
+    print("parents=5 candidates=100 candidates_per_parent=20 proof_budget=100 enhanced_search=depth8_terms80_rounds2_lemmas4")
     print(f"proof_attempts={proof_attempts}")
     for key in ("total","sample_pass","sample_fail","research_accepted","research_rejected","proved","unproved","proved_and_accepted"):
         print(f"{key}={counts[key]}")
