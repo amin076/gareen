@@ -1,0 +1,33 @@
+name: AI parent-neighborhood conjecture experiment
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - experiment/ai-parent-conjectures-100
+    paths:
+      - experiments/ai_parent_conjectures_100.py
+      - .github/workflows/ai-parent-conjectures.yml
+  pull_request:
+    branches:
+      - phase19-ecosystem-strategies
+    paths:
+      - experiments/ai_parent_conjectures_100.py
+      - .github/workflows/ai-parent-conjectures.yml
+
+jobs:
+  experiment:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run 100 AI-authored parent-neighborhood conjectures
+        run: PYTHONPATH=. python experiments/ai_parent_conjectures_100.py
+      - name: Upload verified batch for Melakat
+        uses: actions/upload-artifact@v4
+        with:
+          name: gareen-verified-batch
+          path: outputs/gareen_verified_batch.json
