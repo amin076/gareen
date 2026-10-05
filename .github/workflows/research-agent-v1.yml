@@ -1,0 +1,44 @@
+name: Research Agent v1 cycle 5 to 6
+on:
+  push:
+    branches: [experiment/research-agent-v1-cycle-5-6]
+    paths:
+      - experiments/research_agent_v1.py
+      - .github/workflows/research-agent-v1.yml
+  workflow_dispatch:
+jobs:
+  autonomous-cycle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      OPENAI_RESEARCH_MODEL: gpt-5.6-luna
+      CHILDREN_PER_PARENT: "20"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - name: AI conjectures plus Gareen verification
+        run: PYTHONPATH=. python experiments/research_agent_v1.py
+      - name: Checkout Melakat
+        uses: actions/checkout@v4
+        with:
+          repository: amin076/melakat
+          ref: experiment/gareen-chatgpt-five-generations
+          path: melakat
+      - name: Install Melakat
+        run: pip install -e melakat/desktop
+      - name: Melakat selection for generation 6 parents
+        run: |
+          python melakat/experiments/gareen_ai_generation_cycle.py \
+            --verified-batch outputs/research_agent_v1_generation5_verified.json \
+            --generation 5 --max-population 20 --energy-input 100 --ticks 5 \
+            --output outputs/research_agent_v1_generation6_handoff.json
+      - name: Upload complete audit bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: research-agent-v1-cycle-5-6
+          path: |
+            outputs/research_agent_v1_generation5_verified.json
+            outputs/research_agent_v1_generation6_handoff.json
+            outputs/research_agent_v1_report.json
